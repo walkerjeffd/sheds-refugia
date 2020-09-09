@@ -1,0 +1,34 @@
+{
+  "name": "ldc",
+  "version": "1.0.0",
+  "description": "Node packages used for the Landscape Data Commons website",
+  "main": "index.js",
+  "dependencies": {
+    "async": "^3.1.0",
+    "bcrypt": "^3.0.7",
+    "compression": "^1.7.4",
+    "express": "^4.17.1",
+    "pg": "^7.12.1",
+    "socket.io": "^2.2.0",
+    "topojson": "^3.0.2",
+    "topojson-server": "^3.0.0",
+    "topojson-simplify": "^3.0.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jcoombs20/ldc.git"
+  },
+  "keywords": [
+    "data"
+  ],
+  "author": "Jason Coombs",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jcoombs20/ldc/issues"
+  },
+  "homepage": "https://github.com/jcoombs20/ldc#readme"
+}
