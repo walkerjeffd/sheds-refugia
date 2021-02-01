@@ -3,52 +3,41 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Cold Water Refugia">
+    <meta name="description" content="The Massachusetts ColdWater Refugia Tool is a map-based data visualization tool for exploring coldwater refugia based on predicted stream temperature and brook trout occupancy.">
 
-    <title>Massachusetts cold water refugia tool</title>
-    <link rel="icon" type="image/png" href="images/cold_water_red.png">
+    <title>Massachusetts Coldwater Refugia Tool</title>
 
-    <!-- Scripts -->
-    <!--script src="http://ecosheds.org:3421/socket.io/socket.io.js"></script-->
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <link rel="stylesheet" href="lib/bootstrap/bootstrap.4.3.1.min.css"/>
+    <link rel="stylesheet" href="lib/bootstrap-toggle/bootstrap-toggle.2.2.2.css"/>
+    <link rel="stylesheet" href="lib/font-awesome/css/font-awesome.min.css"/>
+    <link rel="stylesheet" href="lib/jquery-ui/jquery-ui.min.css"/>
+    <link rel="stylesheet" href="lib/leaflet/leaflet.1.5.1.css"/>
+    <link rel="stylesheet" href="lib/leaflet/L.Control.MousePosition.css"/>
+    <link rel="stylesheet" href="lib/leaflet/L.Control.BingGeocoder.css"/>
+
+    <link rel="stylesheet" media="screen and (min-width: 520px)" href="css/desktop.css"/>
+    <link rel="stylesheet" media="screen and (max-width: 519px)" href="css/mobile.css"/>
+
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBk-pRMxjeu0G6yIfxqnZMPQE5LgLLB6P8"></script>
-    <script src="js/d3.v5.min.js"></script>
-    <script src="js/topojson.3.0.2.min.js"></script>
-    <!--script src="js/turf.5.1.6.min.js"></script-->
-    <script src="js/crossfilter.1.4.7.min.js"></script>
-    <!--script src="js/dc.3.1.0.min.js"></script-->
-    <script src="js/plotly.1.52.1.min.js"></script>
-    <script src="js/jquery.3.4.1.min.js"></script>
-    <script src="js/jquery-ui.min.js"></script>
-    <script src="js/jquery-ui-touch-punch.0.0.3.min.js"></script>
-    <script src="js/popper.min.js"></script>
-    <script src="js/bootstrap.4.3.1.min.js"></script>
-    <script src="js/leaflet.1.5.1.js"></script>
-    <script src="js/L.Control.MousePosition.js"></script>
-    <script src="js/Control.BingGeocoder.js"></script>
-    <script src="js/bootstrap-toggle.2.2.2.js"></script>
-    <script src="js/refugia.js"></script>
-    <!--script src="js/socket_emit.js"></script-->
-    <noscript>Your browser does not support JavaScript!</noscript>
+    <script src="lib/jquery/jquery.3.4.1.min.js"></script>
+    <script src="lib/bootstrap/bootstrap.4.3.1.min.js"></script>
+    <script src="lib/bootstrap-toggle/bootstrap-toggle.2.2.2.js"></script>
+    <script src="lib/crossfilter/crossfilter.1.4.7.min.js"></script>
+    <script src="lib/d3/d3.v5.min.js"></script>
+    <script src="lib/jquery-ui/jquery-ui.min.js"></script>
+    <script src="lib/jquery-ui/jquery-ui-touch-punch.0.0.3.min.js"></script>
+    <script src="lib/leaflet/leaflet.1.5.1.js"></script>
+    <script src="lib/leaflet/L.Control.BingGeocoder.js"></script>
+    <script src="lib/leaflet/L.Control.MousePosition.js"></script>
+    <script src="lib/plotly/plotly.1.52.1.min.js"></script>
+    <script src="lib/popper/popper.min.js"></script>
+    <script src="lib/topojson/topojson.3.0.2.min.js"></script>
 
-    <!-- Stylesheets -->
-    <!--link rel="stylesheet" href="css/dc.3.1.0.min.css"/-->
-    <link rel="stylesheet" href="css/font-awesome-4.7.0/css/font-awesome.min.css"/>
-    <link rel="stylesheet" href="css/bootstrap.4.3.1.min.css"/>
-    <link rel="stylesheet" href="css/leaflet.1.5.1.css"/>
-    <link rel="stylesheet" href="css/jquery-ui.min.css"/>
-    <link rel="stylesheet" href="css/L.Control.MousePosition.css"/>
-    <link rel="stylesheet" href="css/Control.BingGeocoder.css"/>
-    <link rel="stylesheet" href="css/bootstrap-toggle.2.2.2.css"/>
-    <!--link rel="stylesheet" href="css/ldc.css"/-->
-    <link rel="stylesheet" media="screen and (min-width: 520px)" href="css/refugia.css"/>
-    <link rel="stylesheet" media="screen and (max-width: 519px)" href="css/refugia_narrow.css"/>
-  </head>  
+    <script src="js/app.js"></script>
+    <noscript>Your browser does not support JavaScript!</noscript>
+  </head>
   <body onload="initPage()">
     <div id="map"></div>
-
-    <script type="text/javascript">
-      //socket_emit();
-    </script>
-
   </body>
 </html>

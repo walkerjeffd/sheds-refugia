@@ -549,12 +549,12 @@ function initPage() {
   //***SHEDS Catchments
 
   Promise.all([
-    //d3.json("geojson/catchments_ma_berk_frank.json"),
-    d3.json("geojson/catchments_ma.json"),
-    d3.tsv("model/1.2.2/df_app_data.tsv"),
-    d3.csv("model/1.2.2/df_z_group.csv"),
-    d3.csv("model/1.2.2/ranef_glmm.csv"),
-    d3.csv("model/1.2.2/summary_glmm.csv")
+    //d3.json("data/geojson/catchments_ma_berk_frank.json"),
+    d3.json("data/geojson/catchments_ma.json"),
+    d3.tsv("data/model/1.2.2/df_app_data.tsv"),
+    d3.csv("data/model/1.2.2/df_z_group.csv"),
+    d3.csv("data/model/1.2.2/ranef_glmm.csv"),
+    d3.csv("data/model/1.2.2/summary_glmm.csv")
     ]).then(displayIt);
 
   function displayIt(data) {
@@ -661,7 +661,7 @@ function initPage() {
 
 
   /*
-  d3.json("geojson/catchments_ma.json").then(function(data) {
+  d3.json("data/geojson/catchments_ma.json").then(function(data) {
     console.timeEnd("catchments");
     topos["catchments_ma"].topo = topojson.feature(data, data.objects.catchments_ma);
     //topos["tl_2017_us_state_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["tl_2017_us_state_wgs84"].topo)); //***Makes a deep copy
