@@ -1,34 +1,29 @@
 {
-  "name": "ldc",
+  "name": "refugia",
   "version": "1.0.0",
-  "description": "Node packages used for the Landscape Data Commons website",
+  "description": "",
   "main": "index.js",
-  "dependencies": {
-    "async": "^3.1.0",
-    "bcrypt": "^3.0.7",
-    "compression": "^1.7.4",
-    "express": "^4.17.1",
-    "pg": "^7.12.1",
-    "socket.io": "^2.2.0",
-    "topojson": "^3.0.2",
-    "topojson-server": "^3.0.0",
-    "topojson-simplify": "^3.0.3"
+  "directories": {
+    "lib": "lib"
   },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jcoombs20/ldc.git"
+    "url": "git+https://github.com/walkerjeffd/refugia.git"
   },
-  "keywords": [
-    "data"
-  ],
-  "author": "Jason Coombs",
+  "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/jcoombs20/ldc/issues"
+    "url": "https://github.com/walkerjeffd/refugia/issues"
   },
-  "homepage": "https://github.com/jcoombs20/ldc#readme"
+  "homepage": "https://github.com/walkerjeffd/refugia#readme",
+  "devDependencies": {
+    "eslint": "^7.19.0",
+    "eslint-config-standard": "^16.0.2",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^4.2.1"
+  }
 }
