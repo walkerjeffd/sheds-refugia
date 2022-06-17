@@ -1,14 +1,13 @@
 /* global $, L, d3, topojson, crossfilter, Plotly */
 
-function initPage () { // eslint-disable-line
-  //* *****Initialize bootstrap tooltip
-  $(function () {
-    $('[data-toggle="tooltip"]').tooltip()
-  })
+let topoSVG
+let topos
+let transform
+let path
+let tooltip
+let map
 
-  //* *****Call function to reposition windows on resize
-  window.addEventListener('resize', resizePanels)
-
+function setupMap () {
   map = new L.Map('map', {
     attributionControl: false,
     zoomControl: false,
@@ -22,696 +21,10 @@ function initPage () { // eslint-disable-line
     maxBoundsViscosity: 0.75
   })
   map.fitBounds([[41.5, -74], [43, -69.5]])
-  map.zoomToggle = 6 //* **Use to set the zoom level for which to transition geoIndicator points betwen tiles and SVG
-
-  //* *****Watch events and get data from postgres when level is appropriate and add as SVG
-  map.on('moveend', function (event) {
-    check4Json()
-    d3.select('#map').style('cursor', '')
-    reset()
-    polyFilter()
-    /*
-    if(d3.select("#spatialFilterCB").property("checked") == true) {
-      var tmpLayer = d3.select(document.getElementById('spatialFilterSelect').selectedOptions[0]).attr("data-layer");
-      if(tmpLayer != null) {
-        polyOverlap(tmpLayer);
-      }
-    }
-*/
-  })
-  map.on('movestart', function () { d3.select('#map').style('cursor', 'grabbing') })
-
-  function check4Json () {
-    /*    //console.log(map.getZoom());
-    if(map.getZoom() >= map.zoomToggle) {
-      //getGeoIndID({bounds: map.getBounds()});
-      getGeoIndID_d3();
-      map.removeLayer(geoInd);
-    }
-    else {
-      map.addLayer(geoInd);
-      geoInd.bringToFront();
-      removeTopo(topos.geoIndicators);
-    }
-*/
-  }
-
-  //* *****Determine if points are within bounding box of current leaflet map
-  getGeoIndID_d3 = function () {
-    const bbox = map.getBounds()
-    const points = [[bbox._northEast.lng, bbox._northEast.lat], [bbox._southWest.lng, bbox._northEast.lat], [bbox._southWest.lng, bbox._southWest.lat], [bbox._northEast.lng, bbox._southWest.lat]]
-    const tmpPoly = d3.polygonHull(points)
-    topos.geoIndicators.topo.features = []
-    topos.geoIndicators.unfiltered.features.forEach(function (d) { if (d3.polygonContains(tmpPoly, d.geometry.coordinates) == true) { topos.geoIndicators.topo.features.push(d) } })
-    addTopo(topos.geoIndicators)
-    for (obj in topos.geoIndicators.cf.filters) {
-      if (obj != 'type' && obj != 'geoIndicators') {
-        if (topos.geoIndicators.cf.filters.type[obj] == 'categorical') {
-          catFilter(obj)
-        } else {
-          spatialFilter(obj)
-        }
-      }
-    }
-  }
-
-  //* *****Make d3 vector layers variable
-  topoSVG = d3.select(map.getPanes().overlayPane).append('svg').attr('id', 'topoSVG')
-  topos = {}
-  transform = d3.geoTransform({ point: projectPoint })
-  path = d3.geoPath().projection(transform)
-    .pointRadius(3.5 + (((map.getZoom() / 10) - 1) * 2))
-
-  L.control.mousePosition().addTo(map)
-
-  //* **Bing geocoder control
-  let tmpPoint = new L.marker()
-  const bingGeocoder = new L.Control.BingGeocoder('At3gymJqaoGjGje-JJ-R5tJOuilUk-gd7SQ0DBZlTXTsRoMfVWU08ZWF1X7QKRRn', {
-    callback: function (results) {
-      if (results.statusCode == 200) {
-        if (d3.select('#bingGeocoderSubmit').classed('fa-search')) {
-          $(document).ready(function () {
-            $('[data-toggle="tooltip"]').tooltip()
-          })
-          document.getElementById('bingGeocoderInput').blur()
-          const bbox = results.resourceSets[0].resources[0].bbox
-          const first = new L.LatLng(bbox[0], bbox[1])
-          const second = new L.LatLng(bbox[2], bbox[3])
-          const tmpBounds = new L.LatLngBounds([first, second])
-          this._map.fitBounds(tmpBounds)
-          this._map.removeLayer(tmpPoint)
-          tmpPoint = new L.marker(results.resourceSets[0].resources[0].point.coordinates)
-          this._map.addLayer(tmpPoint)
-          d3.select('.leaflet-marker-icon')
-            .attr('id', 'mapIcon')
-            .attr('value', results.resourceSets[0].resources[0].name)
-            .attr('data-toggle', 'tooltip')
-            .attr('data-container', 'body')
-            .attr('data-placement', 'top')
-            .attr('data-html', 'true')
-            .attr('title', '<p><b>' + results.resourceSets[0].resources[0].name + '</b></p>')
-          d3.select(tmpPoint)
-            .on('click', function () { clearSearch() })
-          d3.select('#bingGeocoderSubmit')
-            .classed('fa-search', false)
-            .classed('fa-times', true)
-            .property('title', 'Click to clear locate results')
-        } else {
-          clearSearch()
-        }
-      } else {
-        d3.select('#bingGeocoderInput').property('value', 'No matching results')
-      }
-    }
-  })
-
-  //* *****Make headerControls div
-  d3.select('body')
-    .insert('div', ':first-child')
-    .attr('id', 'headerControls')
-
-  //* *****Make div for geolocater
-  d3.select('body')
-    .append('div')
-    .attr('class', 'legend gradDown')
-    .attr('id', 'locateDiv')
-
-  $('#locateDiv').draggable({ containment: 'html', cancel: '.toggle-group,input,textarea,button,select,option' })
-
-  d3.select('#locateDiv')
-    .append('h4')
-    .text('Locate')
-    .attr('class', 'legTitle')
-    .attr('id', 'locateTitle')
-    .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Locate</b></u></p><p>Enter name or coordinates to zoom to a location on the map.</p>"</span>')
-
-  d3.select('#locateTitle')
-    .html(d3.select('#locateTitle').html() + '<div class="exitDiv"><span id="hideLocate" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
-
-  d3.select('#hideLocate')
-    .on('click', function () { toolWindowToggle('locate') })
-
-  d3.select('#locateDiv')
-    .append('div')
-    .attr('id', 'bingGeoLocate')
-
-  document.getElementById('bingGeoLocate').appendChild(bingGeocoder.onAdd(map))
-  d3.select('#bingGeocoderInput')
-    .on('mouseup', function () { if (this.value == 'No matching results') { this.value = '' } else { $(this).select() } })
-    .on('blur', function () { modifySearch(this, 'blur') })
-    .on('keyup', function () { modifySearch(this, 'key') })
-
-  function modifySearch (tmpEl, tmpEvent) {
-    if (tmpEvent == 'blur') {
-      if ((tmpEl.value == '' || tmpEl.value == 'No matching results') && document.getElementById('mapIcon')) {
-        tmpEl.value = d3.select('#mapIcon').attr('value')
-        d3.select('#bingGeocoderSubmit').classed('fa-times', true).classed('fa-search', false)
-      } else if (tmpEl.value == 'No matching results' && !document.getElementById('mapIcon')) {
-        tmpEl.value = ''
-      }
-    } else if (document.getElementById('mapIcon')) {
-      if (tmpEl.value != d3.select('#mapIcon').attr('value')) {
-        d3.select('#bingGeocoderSubmit').classed('fa-times', false).classed('fa-search', true)
-      } else {
-        d3.select('#bingGeocoderSubmit').classed('fa-times', true).classed('fa-search', false)
-      }
-    }
-  }
-
-  //* *****Clear the results of the geo search
-  function clearSearch () {
-    map.removeLayer(tmpPoint)
-    d3.select('.tooltip').remove()
-    d3.select('#bingGeocoderInput').property('value', '')
-
-    d3.select('#bingGeocoderSubmit')
-      .classed('fa-times', false)
-      .classed('fa-search', true)
-      .style('background', '')
-      .property('title', 'Click to zoom to specified location')
-  }
-
-  //* **Add in backgrounds
-  const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-  })
-  const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-  })
-  const googleStreet = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-  })
-  const googleTerrain = L.tileLayer('https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-  })
-  /*
-  var usgsTopo = new L.tileLayer('https://basemap.nationalmap.gov/ArcGIS/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 15,
-    zIndex: 0,
-    attribution: '<a href="http://www.doi.gov">U.S. Department of the Interior</a> | <a href="https://www.usgs.gov">U.S. Geological Survey</a> | <a href="https://www.usgs.gov/laws/policies_notices.html">Policies</a>'
-  });
-
-  var countries = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
-    layers: 'ldc:countries_wgs84',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-*/
-  const blank = new L.tileLayer('')
-
-  //* **Add in overlays
-  const background = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:background',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  const counties = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:counties_ma',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  const huc8 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:huc8_ma',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  const huc10 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:huc10_ma',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  const huc12 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:huc12_ma',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  const flowlines = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'refugia:flowlines_ma',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  })
-
-  /*
-  var imp_sur = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'ottawa:impervious_2016',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var imp_descr = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'ottawa:impervious_descr_2016',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var tree_can = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'ottawa:tree_canopy_2016',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var elevation = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'ottawa:elevation_30m',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-  var solar_rad = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
-    layers: 'ottawa:solar_rad_30m',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var huc6 = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
-    layers: 'ldc:wbdhu6_wgs84',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var huc8 = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
-    layers: 'ldc:wbdhu8_wgs84',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var geoInd = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
-    layers: 'ldc:geoIndicators_public',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-
-  var geoSpecies = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
-    layers: 'ldc:geoSpecies_public',
-    format: 'image/png',
-    transparent: true,
-    tiled: true,
-    version: '1.3.0',
-    maxZoom: 20
-  });
-*/
-
-  const opaVar = [counties, huc8, huc10, huc12, flowlines] // [land_cover, imp_sur, imp_descr, tree_can, elevation, solar_rad, huc6, huc8];
-  infoObj = { counties_ma: 'Counties', huc8_ma: 'HUC-8', huc10_ma: 'HUC-10', huc12_ma: 'HUC-12', flowlines_ma: 'Streams' } // {"land_cover_2016": "Land Cover", "impervious_2016": "Impervious Surface", "impervious_descr_2016": "Impervious Descriptor", "tree_canopy_2016": "Tree Canopy", "elevation_30m": "Elevation", "solar_rad_30m": "Solar Gain", "wbdhu6_wgs84": "HUC-6", "wbdhu8_wgs84": "HUC-8"};
-  infoIDField = { counties_ma: 'county', huc8_ma: 'name', huc10_ma: 'name', huc12_ma: 'name', flowlines_ma: 'featureid' } // {"land_cover_2016": "PALETTE_INDEX", "impervious_2016": "PALETTE_INDEX", "impervious_descr_2016": "PALETTE_INDEX", "tree_canopy_2016": "GRAY_INDEX", "elevation_30m": "GRAY_INDEX", "solar_rad_30m": "GRAY_INDEX", "wbdhu6_wgs84": "name", "wbdhu8_wgs84": "name"};
-  const overlayID = d3.keys(infoObj)
-  const baselayers = { 'Google Terrain': googleTerrain, 'Google Hybrid': googleHybrid, 'Google Satellite': googleSatellite, 'Google Street': googleStreet, None: blank }
-  const overlays = { Counties: counties, 'HUC-8': huc8, 'HUC-10': huc10, 'HUC-12': huc12, Streams: flowlines } // {"Land Cover": land_cover, "Impervious Surface": imp_sur, "Impervious Descriptor": imp_descr, "Tree Canopy": tree_can, "Elevation": elevation, "Solar Gain": solar_rad, "HUC-6": huc6, "HUC-8": huc8};
-  const overlayTitles = d3.keys(overlays)
-  // L.control.layers(baselayers, overlays).addTo(map);
-
-  //* *****Make layer controller
-  //* **baselayers
-  const layerNames = {}
-  layerNames.baseLayers = baselayers // {"Google Terrain": googleTerrain, "Google Hybrid": googleHybrid, "Google Satellite": googleSatellite, "Google Street": googleStreet, "None": blank};
-  layerNames.baseLayers.keys = d3.keys(layerNames.baseLayers)
-  layerNames.baseLayers.values = d3.values(layerNames.baseLayers)
-
-  //* **Overlay layers
-  layerNames.overlays = {}
-  overlayTitles.forEach(function (tmpTitle, i) {
-    layerNames.overlays[tmpTitle] = opaVar[i]
-  })
-  layerNames.overlays.keys = d3.keys(overlays)
-  layerNames.overlays.values = d3.values(overlays)
-
-  d3.select('#headerControls')
-    .insert('div', ':first-child')
-    .attr('id', 'mapTools')
-    .append('div')
-    .attr('id', 'baselayerSelect')
-    .attr('class', 'layerList')
-    .append('div')
-    .attr('id', 'baselayerList')
-    .attr('class', 'cl_select')
-    .property('title', 'Click to change map baselayer')
-    .html('<span id="baselayerListHeader">Change Baselayer</span><span class="fa fa-caret-down pull-right" style="position:relative;top:3px;"></span>')
-    .on('click', function () { if (d3.select('#baselayerListDropdown').style('display') == 'none') { d3.select('#baselayerListDropdown').style('display', 'inline-block') } else { d3.select('#baselayerListDropdown').style('display', 'none') } })
-
-  d3.select('#baselayerSelect')
-    .append('div')
-    .attr('id', 'baselayerListDropdown')
-    .attr('class', 'layerListDropdown')
-    .on('mouseleave', function () { d3.select(this).style('display', 'none') })
-
-  //* *****Add baselayer options
-  d3.select('#baselayerListDropdown').selectAll('div')
-    .data(layerNames.baseLayers.keys)
-    .enter()
-    .append('div')
-    .attr('class', 'layerName')
-    .text(function (d) { return d })
-    .property('value', function (d, i) { return i })
-    .property('title', function (d) { return d })
-    .on('click', function () { changeBaselayer(this) })
-    .append('span')
-    .attr('class', 'fa fa-check pull-right activeOverlay')
-    .style('visibility', function (d, i) { if (i == 0) { return 'visible' } else { return 'hidden' } })
-
-  //* *****Initialize baselayer
-  map.addLayer(googleTerrain)
-  map.addLayer(background)
-
-  //* *****Function to change baselayer on select change
-  function changeBaselayer (tmpDiv) {
-    //* **Remove old layer
-    const layerDivs = d3.select('#baselayerListDropdown').selectAll('div')
-
-    layerDivs._groups[0].forEach(function (tmpLayer) {
-      if (d3.select(tmpLayer).select('span').style('visibility') == 'visible') {
-        d3.select(tmpLayer).select('span').style('visibility', 'hidden')
-        map.removeLayer(layerNames.baseLayers.values[d3.select(tmpLayer).property('value')])
-      }
-    })
-
-    //* **Add new layer
-    d3.select(tmpDiv).select('span').style('visibility', 'visible')
-    map.addLayer(layerNames.baseLayers.values[tmpDiv.value])
-    layerNames.baseLayers.values[tmpDiv.value].bringToBack()
-  }
-
-  //* **Overlay layers
-  d3.select('#mapTools')
-    .append('div')
-    .attr('id', 'overlaySelect')
-    .attr('class', 'layerList')
-    .append('div')
-    .attr('id', 'overlayList')
-    .attr('class', 'cl_select')
-    .property('title', 'Click to select overlay layers to display on map')
-    .html('<span id="overlayListHeader">View Overlay Layers</span><span class="fa fa-caret-down pull-right" style="position:relative;top:3px;"></span>')
-    .on('click', function () { if (d3.select('#overlayListDropdown').style('display') == 'none') { d3.select('#overlayListDropdown').style('display', 'inline-block') } else { d3.select('#overlayListDropdown').style('display', 'none') } })
-  d3.select('#overlaySelect')
-    .append('div')
-    .attr('id', 'overlayListDropdown')
-    .attr('class', 'layerListDropdown')
-    .on('mouseleave', function () { d3.select(this).style('display', 'none') })
-
-  //* *****Add overlay options
-  d3.select('#overlayListDropdown').selectAll('div')
-    .data(layerNames.overlays.keys)
-    .enter()
-    .append('div')
-    .attr('id', function (d, i) { return 'layerToggleDiv' + i })
-    .attr('class', 'layerName')
-    .text(function (d) { return d })
-    .property('value', function (d, i) { return i })
-    .property('title', function (d) { return d })
-    .property('name', function (d, i) { return overlayID[i] })
-    .on('click', function () { changeOverlay(this) })
-    .append('span')
-    .attr('class', 'fa fa-check pull-right activeOverlay')
-    .style('visibility', 'hidden') // function(d) { if(d == "US States") { map.addLayer(states); return "visible"; } else { return "hidden"; } });
-
-  //* *****Function to add/remove overlay layer
-  function changeOverlay (tmpDiv) {
-    if (d3.select(tmpDiv).select('span').style('visibility') == 'hidden') {
-      d3.select(tmpDiv).select('span').style('visibility', 'visible')
-      map.addLayer(layerNames.overlays.values[tmpDiv.value])
-      check4Json()
-      layerNames.overlays.values[tmpDiv.value].bringToFront()
-      // geoInd.bringToFront();
-      addLegendImg(tmpDiv.name, tmpDiv.title, layerNames.overlays.values[tmpDiv.value], ['overlays', tmpDiv.title])
-    } else {
-      d3.select(tmpDiv).select('span').style('visibility', 'hidden')
-      removeTopo(topos[d3.select(tmpDiv).property('name')])
-      map.removeLayer(layerNames.overlays.values[tmpDiv.value])
-      remLegendImg(tmpDiv.name)
-    }
-    // check4Json();
-  }
-
-  //* *****Add SVG group for each overlay layer
-  d3.select('#topoSVG').selectAll('g')
-    .data(overlayID)
-    .enter()
-    .append('g')
-    .attr('id', function (d) { topos[d] = { g: this, class: d }; return d + 'G' })
-    .attr('class', 'leaflet-zoom-hide')
-
-  for (var obj in infoIDField) {
-    topos[obj].id = infoIDField[obj]
-    topos[obj].gids = []
-    topos[obj].feats = []
-  }
-
-  //* *****Add SVG group for geoIndicator points
-  d3.select('#topoSVG')
-    .append('g')
-    // .attr("id", "geoIndicatorsG")
-    .attr('id', 'catchments_maG')
-    .attr('class', 'leaflet-zoom-hide')
-
-  // topos.geoIndicators = {"g": d3.select("#geoIndicatorsG")._groups[0][0], "class": "geoIndicators", "id": "ogc_fid", gids: [], feats: []};
-  topos.catchments_ma = { g: d3.select('#catchments_maG')._groups[0][0], id: 'FEATUREID', gids: [], feats: [] }
-
-  Promise.all([
-    // d3.json("geojson/catchments_ma_berk_frank.json"),
-    d3.json('data/geojson/catchments_ma.json'),
-    d3.tsv('data/model/dev/df_app_data.tsv'),
-    d3.csv('data/model/dev/df_z_group.csv'),
-    d3.csv('data/model/dev/ranef_glmm.csv'),
-    d3.csv('data/model/dev/summary_glmm.csv')
-  ]).then(displayIt)
-
-  function displayIt (data) {
-    // console.log(data);
-    topos.catchments_ma.topo = topojson.feature(data[0], data[0].objects.catchments_ma)
-
-    //* **Make a crossfilter of the df_app_data
-    const tmpCF = crossfilter(data[1])
-    topos.cf = {}
-    topos.cf.ranges = {}
-    topos.cf.cf = tmpCF
-    topos.cf.all = tmpCF.groupAll()
-    const tmpKeys = data[1].columns
-    topos.cf.keys = tmpKeys
-    tmpKeys.forEach(function (key) {
-      topos.cf[key] = tmpCF.dimension(function (d) { return +d[key] })
-      topos.cf[key + 's'] = topos.cf[key].group() //* **Probably not necessary to make groups since we're not graphing
-      topos.cf[key].filterFunction(function (d) { return d != '' })
-      topos.cf.ranges[key] = { min: parseFloat(topos.cf[key].bottom(1)[0][key]), max: parseFloat(topos.cf[key].top(1)[0][key]) }
-      topos.cf[key].filterAll()
-    })
-
-    const newKeys = JSON.parse(JSON.stringify(tmpKeys))
-    newKeys[0] = 'None'
-    newKeys.splice(1, 1)
-    d3.select('#catchmentSelect').selectAll('options')
-      .data(newKeys)
-      .enter()
-      .append('option')
-      .attr('data-attr', function (d) { return d })
-      .attr('value', function (d) { return d })
-      .text(function (d) { return d })
-
-    topos.model = {}
-    topos.model.app_data = {}
-    topos.model.z_group = {}
-    topos.model.ranef_glmm = {}
-    topos.model.summary_glmm = {}
-
-    data[1].forEach(function (row) {
-      const tmpObj = {}
-      data[1].columns.slice(1).forEach(function (key) {
-        if (key == 'huc10') {
-          tmpObj[key] = row[key]
-        } else {
-          tmpObj[key] = parseFloat(row[key])
-        }
-      })
-      topos.model.app_data[row.FEATUREID.toString()] = tmpObj
-    })
-
-    data[2].forEach(function (row) {
-      topos.model.z_group[row.var] = { mean: parseFloat(row.mean), sd: parseFloat(row.sd) }
-    })
-
-    data[3].forEach(function (row) {
-      topos.model.ranef_glmm[row.huc10] = { Intercept: parseFloat(row.Intercept), AreaSqKM: parseFloat(row.AreaSqKM), agriculture: parseFloat(row.agriculture), summer_prcp_mm: parseFloat(row.summer_prcp_mm), mean_jul_temp: parseFloat(row.mean_jul_temp) }
-    })
-
-    data[4].forEach(function (row) {
-      topos.model.summary_glmm[row.variable] = { Estimate: parseFloat(row.Estimate), SE: parseFloat(row['Std.Error']) }
-    })
-
-    //* **Add df_app_data to topo properties
-    topos.catchments_ma.topo.features.forEach(function (feat) {
-      feat.properties = Object.assign({}, feat.properties, topos.model.app_data[feat.properties.FEATUREID.toString()])
-    })
-
-    //* **Add the catchment layer to leaflet as SVG
-    addTopo(topos.catchments_ma)
-
-    d3.select('#plotY')
-      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
-      .selectAll('option')
-      .data(data[1].columns.slice(2, 8))
-      .enter()
-      .append('option')
-      .text(function (d) { return d })
-
-    d3.select('#plotX')
-      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
-      .selectAll('option')
-      .data(data[1].columns.slice(2, 8))
-      .enter()
-      .append('option')
-      .text(function (d) { return d })
-
-    d3.select('#plotX')
-      .property('selectedIndex', 1)
-    d3.select('#plotY')
-      .property('selectedIndex', 3)
-
-    d3.select('#catchmentSelect')
-      .property('selectedIndex', 8)
-
-    changeChoro(d3.select('#catchmentSelect').property('value'), color)
-    toolWindowToggle('map')
-  };
-
-  /*
-  d3.json("geojson/catchments_ma.json").then(function(data) {
-    console.timeEnd("catchments");
-    topos["catchments_ma"].topo = topojson.feature(data, data.objects.catchments_ma);
-    //topos["tl_2017_us_state_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["tl_2017_us_state_wgs84"].topo)); //***Makes a deep copy
-    addTopo(topos.catchments_ma);
-  });
-  */
-
-  /*
-  //***Counties
-  d3.json("gis/counties_qgis_mapshaper.json").then(function(data) {
-    console.timeEnd("counties");
-    topos["tl_2017_us_county_wgs84"].topo = topojson.feature(data, data.objects.counties);
-    //topos["tl_2017_us_county_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["tl_2017_us_county_wgs84"].topo)); //***Makes a deep copy
-    //addTopo(topos.tl_2017_us_county_wgs84);
-  });
-
-  //***MLRA
-  d3.json("gis/mlra_qgis_mapshaper.json").then(function(data) {
-    console.timeEnd("mlra");
-    topos["mlra_v42_wgs84"].topo = topojson.feature(data, data.objects.mlra);
-    //topos["mlra_v42_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["mlra_v42_wgs84"].topo)); //***Makes a deep copy
-    //addTopo(topos.mlra_v42_wgs84);
-  });
-
-  //***HUC6
-  d3.json("gis/huc_six_qgis_mapshaper.json").then(function(data) {
-    console.timeEnd("huc6");
-    topos["wbdhu6_wgs84"].topo = topojson.feature(data, data.objects.huc6);
-    //topos["wbdhu6_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["wbdhu6_wgs84"].topo)); //***Makes a deep copy
-    //addTopo(topos.wbdhu6_wgs84);
-  });
-
-  //***HUC8
-  d3.json("gis/huc_eight_qgis_mapshaper.json").then(function(data) {
-    console.timeEnd("huc8");
-    topos["wbdhu8_wgs84"].topo = topojson.feature(data, data.objects.huc8);
-    //topos["wbdhu8_wgs84"].unfiltered = JSON.parse(JSON.stringify(topos["wbdhu8_wgs84"].topo)); //***Makes a deep copy
-    //addTopo(topos.wbdhu8_wgs84);
-  });
-*/
-
-  //* *****Filter current features select layer by map bounding box
-  function polyOverlap (tmpLayer) {
-    /*
-    //Filter SVG overlay features by bounding box
-    var bbox = map.getBounds();
-    var bboxPoly = turf.bboxPolygon([bbox._southWest.lng, bbox._southWest.lat, bbox._northEast.lng, bbox._northEast.lat]);
-
-    topos[tmpLayer].topo.features = [];
-    topos[tmpLayer].unfiltered.features.forEach(function(d) {
-      if(d.geometry.type == "Polygon") {
-        if(turf.booleanContains(bboxPoly, d) == true || turf.booleanOverlap(bboxPoly, d) == true) { topos[tmpLayer].topo.features.push(d); }
-      }
-      else {  //multiPolygon
-        var tmpBi = 0;
-        d.geometry.coordinates.some(function(coords) {
-          var poly = turf.polygon(coords);
-          if(turf.booleanContains(bboxPoly, poly) == true || turf.booleanOverlap(bboxPoly, poly) == true) {
-            topos[tmpLayer].topo.features.push(d);
-            tmpBi = 1;
-          }
-          return tmpBi == 1;
-        });
-      }
-    });
-*/
-    addTopo(topos[tmpLayer])
-  }
-
-  //* *****Remove selectable SVG layer when spatial filter is unchecked or layer is removed
-  function polyFilter () {
-    const tmpLayer = d3.select('#spatialFilterSelect').attr('data-layer')
-    if (d3.select('#spatialFilterCB').property('checked') == true) {
-      if (tmpLayer != null) {
-        d3.selectAll('.' + tmpLayer).classed('disabled', false)
-        // polyOverlap(tmpLayer);
-        addTopo(topos[tmpLayer])
-      } else {
-        d3.selectAll('.' + tmpLayer).remove()
-      }
-    } else {
-      d3.selectAll('.' + tmpLayer).classed('disabled', true)
-    }
-  }
-
-  // Add panel icons
+  map.zoomToggle = 6 // use to set the zoom level for which to transition geoIndicator points betwen tiles and SVG
+}
+function setupUi () {
+  // add panel icons
   d3.select('#headerControls')
     .append('div')
     .attr('id', 'panelTools')
@@ -719,37 +32,35 @@ function initPage () { // eslint-disable-line
   const hcPanels = ['info', 'legend', 'map', 'plot', 'locate', 'extent']
   const hcGlyphs = ['fa-info', 'fa-th-list', 'fa-map', 'fa-area-chart', 'fa-search', 'fa-globe']
   const hcLabel = ['Identify', 'Legend', 'Catchments', 'Plot', 'Locate', 'Zoom']
+
   d3.select('#panelTools').selectAll('divs')
     .data(hcPanels)
     .enter()
     .append('div')
     .attr('id', function (d) { return 'hc' + d.charAt(0).toUpperCase() + d.slice(1) + 'Div' })
-    .attr('class', function (d) { if (d != 'select') { return 'hcPanelDivs layerList' } else { return 'hcPanelDivs layerList disabled' } })
+    .attr('class', function (d) {
+      if (d !== 'select') {
+        return 'hcPanelDivs layerList'
+      } else {
+        return 'hcPanelDivs layerList disabled'
+      }
+    })
     .property('title', function (d, i) {
-      if (d == 'extent') {
+      if (d === 'extent') {
         return 'Click to zoom to initial extent'
       } else {
         return 'Click to show ' + hcLabel[i] + ' window'
       }
     })
-    .html(function (d, i) { if (d != 'search') { return '<span class="fa ' + hcGlyphs[i] + '"></span>' } else { return '<span class="fa ' + hcGlyphs[i] + '" data-toggle="collapse" data-target="#bingGeoLocate"></span>' } })
+    .html(function (d, i) {
+      if (d !== 'search') {
+        return '<span class="fa ' + hcGlyphs[i] + '"></span>'
+      } else {
+        return '<span class="fa ' + hcGlyphs[i] + '" data-toggle="collapse" data-target="#bingGeoLocate"></span>'
+      }
+    })
     .on('click', function (d) {
       switch (d) {
-        /*
-          case "info":
-            toolWindowToggle(d);
-            break;
-          case "legend":
-            toolWindowToggle(d);
-            break;
-          case "locate":
-            toolWindowToggle(d);
-            break;
-          case "filter":
-            toolWindowToggle(d);
-            //toggleSelection(this);
-            break;
-*/
         case 'extent':
           map.fitBounds([[41.5, -74], [43, -69.5]])
           break
@@ -759,101 +70,13 @@ function initPage () { // eslint-disable-line
       }
     })
 
-  // Add login icon to enable querying and visualizing of private data
-  /*
- d3.select("#headerControls")
-    .append("div")
-    .attr("id", "secureDiv")
-    .attr("class", "hcPanelDivs layerList")
-    .html('<span class="secure fa fa-lock" title="Click to log in"></span>');
-
-  d3.select("#secureDiv").select("span")
-    .on("click", function() {
-      var tmpSpan = d3.select(this);
-      if(tmpSpan.classed("fa-lock") == true) {
-        $('#loginModal').modal('show')
-      }
-      else {
-        tmpSpan.classed("fa-unlock", false);
-        tmpSpan.classed("fa-lock", true);
-        tmpSpan.property("title", "Click to log in");
-        tryLogin({"user": "default", "password": "default"});
-      }
-    });
-
-  //******Add modal login box
-  d3.select("body")
-    .append("div")
-    .attr("id", "loginModal")
-    .attr("class", "modal fade")
-    .append("div")
-    .attr("class", "modal-dialog modal-dialog-centered")
-    .html('<div class="modal-body">'
-      + '<span id="loginClose" class="fa fa-times-circle" data-dismiss="modal" title="Cancel login"></span>'
-      + '<div id="loginDiv">'
-        + '<input type="text" name="user" autocomplete="on" placeholder="Username"><br>'
-        + '<input type="password" name="password" placeholder="Password"><br>'
-        + '<p id="loginErr"></p>'
-        + '<button id="loginBut" title="Click to login"><span class="fa fa-sign-in"></span>Login</button>'
-        + '<p id="registerP"><a href="https://landscapedatacommons.org/registration" target="_blank">Register</a> for an account</p>'
-      + '</div>'
-      + '</div>'
-    );
-
-  //***Add keyboard listener to input
-  d3.select("#loginDiv").selectAll("input")
-    .on("keyup", function() { if(d3.event.keyCode == 13) { login(); } });
-
-  d3.select("#loginBut")
-    .on("click", function() {
-      login();
-    });
-
-  function login() {
-    var tmpData = {};
-    tmpData.user = d3.select("input[name='user']").property("value");
-    tmpData.password = d3.select("input[name='password']").property("value");
-    tryLogin(tmpData);
-  }
-*/
-
-  function toggleSelection (tmpDiv) {
-    if (d3.select(tmpDiv).classed('disabled') == true) {
-      d3.select(tmpDiv).classed('disabled', false).classed('enabled', true).property('title', 'Click to disable overlay feature selection')
-      d3.selectAll('.activeTopo').classed('disabled', false)
-    } else {
-      d3.select(tmpDiv).classed('disabled', true).classed('enabled', false).property('title', 'Click to ensable overlay feature selection')
-      d3.selectAll('.activeTopo').classed('disabled', true)
-    }
-  }
-
-  //* *****Function to toggle tool windows
-  const toggleWords = { legend: 'Legend', info: 'Identify', locate: 'Locate', filter: 'Filter', plot: 'Plot', map: 'Catchments' }
-  toolWindowToggle = function (tmpDiv) {
-    if (d3.select('#' + tmpDiv + 'Div').style('opacity') == '1') {
-      d3.select('#' + tmpDiv + 'Div').transition().style('opacity', '0').style('visibility', 'hidden').style('display', function () { if (tmpDiv == 'plot') { return 'none' } })
-      d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div').property('title', 'Click to show ' + toggleWords[tmpDiv] + ' window')
-    } else {
-      d3.select('#' + tmpDiv + 'Div').transition().duration(250).ease(d3.easeCubic).style('opacity', '1').style('display', 'block').style('visibility', 'visible').on('end', resizePanels)
-      d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div').property('title', 'Click to hide ' + toggleWords[tmpDiv] + ' window')
-      setZ(d3.select('#' + tmpDiv + 'Div')._groups[0][0])
-    }
-  }
-
-  function setZ (tmpWin) {
-    if (d3.select('#map').classed('introjs-showElement') == false) {
-      d3.selectAll('#legendDiv,#infoDiv,#locateDiv,#filterDiv,#pointDiv,#downloadDiv,#plotDiv,#mapDiv').style('z-index', function () { if (d3.select(this).style('opacity') == 1) { return 1001 } else { return 7500 } })
-      d3.select(tmpWin).style('z-index', 1002)
-    }
-  }
-
-  //* *****Make tooltip for displaying attribute data
+  // make tooltip for displaying attribute data
   tooltip = d3.select('body')
     .append('div')
     .attr('id', 'd3Tooltip')
     .attr('class', 'd3Tooltip')
 
-  //* *****Make div for geoIndicator attributes
+  // make div for geoIndicator attributes
   d3.select('body')
     .append('div')
     .attr('class', 'legend gradDown')
@@ -881,7 +104,7 @@ function initPage () { // eslint-disable-line
     .append('table')
     .attr('id', 'pointAttrTable')
 
-  //* *****Make div for info
+  // make div for info
   d3.select('body')
     .append('div')
     .attr('class', 'legend gradDown')
@@ -941,7 +164,7 @@ function initPage () { // eslint-disable-line
     .attr('class', 'ldcButton')
     .text('Proceed')
     .property('title', 'Click to initiate queries for selected data')
-    .on('click', function () { downloadData() })
+    // .on('click', function () { downloadData() })
 
   d3.select('#download')
     .append('div')
@@ -1010,10 +233,532 @@ function initPage () { // eslint-disable-line
     .attr('id', 'spatialFilterClear')
     .attr('class', 'ldcButton')
     .text('Clear All Conditions')
+}
+
+function initPage () { // eslint-disable-line
+  $('[data-toggle="tooltip"]').tooltip()
+
+  window.addEventListener('resize', resizePanels)
+
+  setupMap()
+
+  // watch events and get data from postgres when level is appropriate and add as SVG
+  map.on('moveend', function () {
+    d3.select('#map').style('cursor', '')
+    reset()
+    polyFilter()
+  })
+  map.on('movestart', function () { d3.select('#map').style('cursor', 'grabbing') })
+
+  topoSVG = d3.select(map.getPanes().overlayPane)
+    .append('svg')
+    .attr('id', 'topoSVG')
+  topos = {}
+  transform = d3.geoTransform({ point: projectPoint })
+  path = d3.geoPath().projection(transform)
+    .pointRadius(3.5 + (((map.getZoom() / 10) - 1) * 2))
+
+  L.control.mousePosition().addTo(map)
+
+  // * **Bing geocoder control
+  let tmpPoint = new L.marker() // eslint-disable-line
+  const bingGeocoder = new L.Control.BingGeocoder('At3gymJqaoGjGje-JJ-R5tJOuilUk-gd7SQ0DBZlTXTsRoMfVWU08ZWF1X7QKRRn', {
+    callback: function (results) {
+      if (results.statusCode === 200) {
+        if (d3.select('#bingGeocoderSubmit').classed('fa-search')) {
+          $(document).ready(function () {
+            $('[data-toggle="tooltip"]').tooltip()
+          })
+          document.getElementById('bingGeocoderInput').blur()
+          const bbox = results.resourceSets[0].resources[0].bbox
+          const first = new L.LatLng(bbox[0], bbox[1])
+          const second = new L.LatLng(bbox[2], bbox[3])
+          const tmpBounds = new L.LatLngBounds([first, second])
+          this._map.fitBounds(tmpBounds)
+          this._map.removeLayer(tmpPoint)
+          tmpPoint = new L.marker(results.resourceSets[0].resources[0].point.coordinates) // eslint-disable-line
+          this._map.addLayer(tmpPoint)
+          d3.select('.leaflet-marker-icon')
+            .attr('id', 'mapIcon')
+            .attr('value', results.resourceSets[0].resources[0].name)
+            .attr('data-toggle', 'tooltip')
+            .attr('data-container', 'body')
+            .attr('data-placement', 'top')
+            .attr('data-html', 'true')
+            .attr('title', '<p><b>' + results.resourceSets[0].resources[0].name + '</b></p>')
+          d3.select(tmpPoint)
+            .on('click', function () { clearSearch() })
+          d3.select('#bingGeocoderSubmit')
+            .classed('fa-search', false)
+            .classed('fa-times', true)
+            .property('title', 'Click to clear locate results')
+        } else {
+          clearSearch()
+        }
+      } else {
+        d3.select('#bingGeocoderInput').property('value', 'No matching results')
+      }
+    }
+  })
+
+  d3.select('body')
+    .insert('div', ':first-child')
+    .attr('id', 'headerControls')
+
+  d3.select('body')
+    .append('div')
+    .attr('class', 'legend gradDown')
+    .attr('id', 'locateDiv')
+
+  $('#locateDiv').draggable({ containment: 'html', cancel: '.toggle-group,input,textarea,button,select,option' })
+
+  d3.select('#locateDiv')
+    .append('h4')
+    .text('Locate')
+    .attr('class', 'legTitle')
+    .attr('id', 'locateTitle')
+    .append('span')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Locate</b></u></p><p>Enter name or coordinates to zoom to a location on the map.</p>"</span>')
+
+  d3.select('#locateTitle')
+    .html(d3.select('#locateTitle').html() + '<div class="exitDiv"><span id="hideLocate" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+
+  d3.select('#hideLocate')
+    .on('click', function () { toolWindowToggle('locate') })
+
+  d3.select('#locateDiv')
+    .append('div')
+    .attr('id', 'bingGeoLocate')
+
+  document.getElementById('bingGeoLocate').appendChild(bingGeocoder.onAdd(map))
+  d3.select('#bingGeocoderInput')
+    .on('mouseup', function () { if (this.value === 'No matching results') { this.value = '' } else { $(this).select() } })
+    .on('blur', function () { modifySearch(this, 'blur') })
+    .on('keyup', function () { modifySearch(this, 'key') })
+
+  function modifySearch (tmpEl, tmpEvent) {
+    if (tmpEvent === 'blur') {
+      if ((tmpEl.value === '' || tmpEl.value === 'No matching results') && document.getElementById('mapIcon')) {
+        tmpEl.value = d3.select('#mapIcon').attr('value')
+        d3.select('#bingGeocoderSubmit').classed('fa-times', true).classed('fa-search', false)
+      } else if (tmpEl.value === 'No matching results' && !document.getElementById('mapIcon')) {
+        tmpEl.value = ''
+      }
+    } else if (document.getElementById('mapIcon')) {
+      if (tmpEl.value !== d3.select('#mapIcon').attr('value')) {
+        d3.select('#bingGeocoderSubmit').classed('fa-times', false).classed('fa-search', true)
+      } else {
+        d3.select('#bingGeocoderSubmit').classed('fa-times', true).classed('fa-search', false)
+      }
+    }
+  }
+
+  // clear the results of the geo search
+  function clearSearch () {
+    map.removeLayer(tmpPoint)
+    d3.select('.tooltip').remove()
+    d3.select('#bingGeocoderInput').property('value', '')
+
+    d3.select('#bingGeocoderSubmit')
+      .classed('fa-times', false)
+      .classed('fa-search', true)
+      .style('background', '')
+      .property('title', 'Click to zoom to specified location')
+  }
+
+  const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+  })
+  const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+  })
+  const googleStreet = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+  })
+  const googleTerrain = L.tileLayer('https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+  })
+  // var usgsTopo = new L.tileLayer('https://basemap.nationalmap.gov/ArcGIS/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}', {
+  //   maxZoom: 15,
+  //   zIndex: 0,
+  //   attribution: '<a href="http://www.doi.gov">U.S. Department of the Interior</a> | <a href="https://www.usgs.gov">U.S. Geological Survey</a> | <a href="https://www.usgs.gov/laws/policies_notices.html">Policies</a>'
+  // });
+
+  // var countries = L.tileLayer.wms('https://landscapedatacommons.org/geoserver/wms', {
+  //   layers: 'ldc:countries_wgs84',
+  //   format: 'image/png',
+  //   transparent: true,
+  //   tiled: true,
+  //   version: '1.3.0',
+  //   maxZoom: 20
+  // });
+  const blank = new L.tileLayer('') // eslint-disable-line
+
+  const background = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:background',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const counties = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:counties_ma',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const huc8 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:huc8_ma',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const huc10 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:huc10_ma',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const huc12 = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:huc12_ma',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const flowlines = L.tileLayer.wms('https://ecosheds.org/geoserver/wms', {
+    layers: 'refugia:flowlines_ma',
+    format: 'image/png',
+    transparent: true,
+    tiled: true,
+    version: '1.3.0',
+    maxZoom: 20
+  })
+
+  const opaVar = [counties, huc8, huc10, huc12, flowlines]
+  const infoObj = {
+    counties_ma: 'Counties',
+    huc8_ma: 'HUC-8',
+    huc10_ma: 'HUC-10',
+    huc12_ma: 'HUC-12',
+    flowlines_ma: 'Streams'
+  }
+  const infoIDField = {
+    counties_ma: 'county',
+    huc8_ma: 'name',
+    huc10_ma: 'name',
+    huc12_ma: 'name',
+    flowlines_ma: 'featureid'
+  }
+  const overlayID = d3.keys(infoObj)
+  const baselayers = {
+    'Google Terrain': googleTerrain,
+    'Google Hybrid': googleHybrid,
+    'Google Satellite': googleSatellite,
+    'Google Street': googleStreet,
+    None: blank
+  }
+  const overlays = {
+    Counties: counties,
+    'HUC-8': huc8,
+    'HUC-10': huc10,
+    'HUC-12': huc12,
+    Streams: flowlines
+  }
+  const overlayTitles = d3.keys(overlays)
+
+  const layerNames = {}
+  layerNames.baseLayers = baselayers
+  layerNames.baseLayers.keys = d3.keys(layerNames.baseLayers)
+  layerNames.baseLayers.values = d3.values(layerNames.baseLayers)
+
+  layerNames.overlays = {}
+  overlayTitles.forEach(function (tmpTitle, i) {
+    layerNames.overlays[tmpTitle] = opaVar[i]
+  })
+  layerNames.overlays.keys = d3.keys(overlays)
+  layerNames.overlays.values = d3.values(overlays)
+
+  d3.select('#headerControls')
+    .insert('div', ':first-child')
+    .attr('id', 'mapTools')
+    .append('div')
+    .attr('id', 'baselayerSelect')
+    .attr('class', 'layerList')
+    .append('div')
+    .attr('id', 'baselayerList')
+    .attr('class', 'cl_select')
+    .property('title', 'Click to change map baselayer')
+    .html('<span id="baselayerListHeader">Change Baselayer</span><span class="fa fa-caret-down pull-right" style="position:relative;top:3px;"></span>')
+    .on('click', function () {
+      if (d3.select('#baselayerListDropdown').style('display') === 'none') {
+        d3.select('#baselayerListDropdown').style('display', 'inline-block')
+      } else {
+        d3.select('#baselayerListDropdown').style('display', 'none')
+      }
+    })
+
+  d3.select('#baselayerSelect')
+    .append('div')
+    .attr('id', 'baselayerListDropdown')
+    .attr('class', 'layerListDropdown')
+    .on('mouseleave', function () {
+      return d3.select(this).style('display', 'none')
+    })
+
+  d3.select('#baselayerListDropdown').selectAll('div')
+    .data(layerNames.baseLayers.keys)
+    .enter()
+    .append('div')
+    .attr('class', 'layerName')
+    .text(function (d) { return d })
+    .property('value', function (d, i) { return i })
+    .property('title', function (d) { return d })
+    .on('click', function () { changeBaselayer(this) })
+    .append('span')
+    .attr('class', 'fa fa-check pull-right activeOverlay')
+    .style('visibility', function (d, i) { if (i === 0) { return 'visible' } else { return 'hidden' } })
+
+  map.addLayer(googleTerrain)
+  map.addLayer(background)
+
+  function changeBaselayer (tmpDiv) {
+    const layerDivs = d3.select('#baselayerListDropdown').selectAll('div')
+
+    layerDivs._groups[0].forEach(function (tmpLayer) {
+      if (d3.select(tmpLayer).select('span').style('visibility') === 'visible') {
+        d3.select(tmpLayer).select('span').style('visibility', 'hidden')
+        map.removeLayer(layerNames.baseLayers.values[d3.select(tmpLayer).property('value')])
+      }
+    })
+
+    d3.select(tmpDiv).select('span').style('visibility', 'visible')
+    map.addLayer(layerNames.baseLayers.values[tmpDiv.value])
+    layerNames.baseLayers.values[tmpDiv.value].bringToBack()
+  }
+
+  d3.select('#mapTools')
+    .append('div')
+    .attr('id', 'overlaySelect')
+    .attr('class', 'layerList')
+    .append('div')
+    .attr('id', 'overlayList')
+    .attr('class', 'cl_select')
+    .property('title', 'Click to select overlay layers to display on map')
+    .html('<span id="overlayListHeader">View Overlay Layers</span><span class="fa fa-caret-down pull-right" style="position:relative;top:3px;"></span>')
+    .on('click', function () {
+      if (d3.select('#overlayListDropdown').style('display') === 'none') {
+        d3.select('#overlayListDropdown').style('display', 'inline-block')
+      } else {
+        d3.select('#overlayListDropdown').style('display', 'none')
+      }
+    })
+  d3.select('#overlaySelect')
+    .append('div')
+    .attr('id', 'overlayListDropdown')
+    .attr('class', 'layerListDropdown')
+    .on('mouseleave', function () {
+      return d3.select(this).style('display', 'none')
+    })
+
+  d3.select('#overlayListDropdown').selectAll('div')
+    .data(layerNames.overlays.keys)
+    .enter()
+    .append('div')
+    .attr('id', function (d, i) { return 'layerToggleDiv' + i })
+    .attr('class', 'layerName')
+    .text(function (d) { return d })
+    .property('value', function (d, i) { return i })
+    .property('title', function (d) { return d })
+    .property('name', function (d, i) { return overlayID[i] })
+    .on('click', function () { changeOverlay(this) })
+    .append('span')
+    .attr('class', 'fa fa-check pull-right activeOverlay')
+    .style('visibility', 'hidden')
+
+  function changeOverlay (tmpDiv) {
+    if (d3.select(tmpDiv).select('span').style('visibility') === 'hidden') {
+      d3.select(tmpDiv).select('span').style('visibility', 'visible')
+      map.addLayer(layerNames.overlays.values[tmpDiv.value])
+      layerNames.overlays.values[tmpDiv.value].bringToFront()
+      addLegendImg(tmpDiv.name, tmpDiv.title, layerNames.overlays.values[tmpDiv.value], ['overlays', tmpDiv.title])
+    } else {
+      d3.select(tmpDiv).select('span').style('visibility', 'hidden')
+      removeTopo(topos[d3.select(tmpDiv).property('name')])
+      map.removeLayer(layerNames.overlays.values[tmpDiv.value])
+      remLegendImg(tmpDiv.name)
+    }
+  }
+
+  d3.select('#topoSVG').selectAll('g')
+    .data(overlayID)
+    .enter()
+    .append('g')
+    .attr('id', function (d) { topos[d] = { g: this, class: d }; return d + 'G' })
+    .attr('class', 'leaflet-zoom-hide')
+
+  for (const obj in infoIDField) {
+    topos[obj].id = infoIDField[obj]
+    topos[obj].gids = []
+    topos[obj].feats = []
+  }
+
+  d3.select('#topoSVG')
+    .append('g')
+    .attr('id', 'catchments_maG')
+    .attr('class', 'leaflet-zoom-hide')
+
+  topos.catchments_ma = {
+    g: d3.select('#catchments_maG')._groups[0][0],
+    id: 'FEATUREID',
+    gids: [],
+    feats: []
+  }
+
+  Promise.all([
+    d3.json('data/geojson/catchments_ma.json'),
+    d3.tsv('data/model/1.2.2/df_app_data.tsv'),
+    d3.csv('data/model/1.2.2/df_z_group.csv'),
+    d3.csv('data/model/1.2.2/ranef_glmm.csv'),
+    d3.csv('data/model/1.2.2/summary_glmm.csv')
+  ]).then(render)
+
+  function render (data) {
+    topos.catchments_ma.topo = topojson.feature(data[0], data[0].objects.catchments_ma)
+
+    // crossfilter
+    const xf = crossfilter(data[1])
+    topos.xf = {}
+    topos.xf.ranges = {}
+    topos.xf.xf = xf
+    topos.xf.all = xf.groupAll()
+    const keys = data[1].columns
+    topos.xf.keys = keys
+    keys.forEach(key => {
+      topos.xf[key] = xf.dimension(d => d[key] === '' ? -Infinity : +d[key])
+      // topos.xf[key + 's'] = topos.xf[key].group() //* **Probably not necessary to make groups since we're not graphing
+      topos.xf[key].filterFunction(d => d > -Infinity)
+
+      console.log('key', key, topos.xf[key].bottom(1))
+      topos.xf.ranges[key] = {
+        min: parseFloat(topos.xf[key].bottom(1)[0][key]),
+        max: parseFloat(topos.xf[key].top(1)[0][key])
+      }
+      topos.xf[key].filterAll()
+    })
+
+    const newKeys = JSON.parse(JSON.stringify(keys))
+    newKeys[0] = 'None'
+    newKeys.splice(1, 1)
+    d3.select('#catchmentSelect').selectAll('options')
+      .data(newKeys)
+      .enter()
+      .append('option')
+      .attr('data-attr', function (d) { return d })
+      .attr('value', function (d) { return d })
+      .text(function (d) { return d })
+
+    topos.model = {}
+    topos.model.app_data = {}
+    topos.model.z_group = {}
+    topos.model.ranef_glmm = {}
+    topos.model.summary_glmm = {}
+
+    data[1].forEach(function (row) {
+      const tmpObj = {}
+      data[1].columns.slice(1).forEach(function (key) {
+        if (key === 'huc10') {
+          tmpObj[key] = row[key]
+        } else {
+          tmpObj[key] = parseFloat(row[key])
+        }
+      })
+      topos.model.app_data[row.FEATUREID.toString()] = tmpObj
+    })
+
+    data[2].forEach(function (row) {
+      topos.model.z_group[row.var] = { mean: parseFloat(row.mean), sd: parseFloat(row.sd) }
+    })
+
+    data[3].forEach(function (row) {
+      topos.model.ranef_glmm[row.huc10] = { Intercept: parseFloat(row.Intercept), AreaSqKM: parseFloat(row.AreaSqKM), agriculture: parseFloat(row.agriculture), summer_prcp_mm: parseFloat(row.summer_prcp_mm), mean_jul_temp: parseFloat(row.mean_jul_temp) }
+    })
+
+    data[4].forEach(function (row) {
+      topos.model.summary_glmm[row.variable] = { Estimate: parseFloat(row.Estimate), SE: parseFloat(row['Std.Error']) }
+    })
+
+    topos.catchments_ma.topo.features.forEach(function (feat) {
+      feat.properties = Object.assign({}, feat.properties, topos.model.app_data[feat.properties.FEATUREID.toString()])
+    })
+
+    addTopo(topos.catchments_ma)
+
+    d3.select('#plotY')
+      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
+      .selectAll('option')
+      .data(data[1].columns.slice(2, 8))
+      .enter()
+      .append('option')
+      .text(function (d) { return d })
+
+    d3.select('#plotX')
+      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
+      .selectAll('option')
+      .data(data[1].columns.slice(2, 8))
+      .enter()
+      .append('option')
+      .text(function (d) { return d })
+
+    d3.select('#plotX')
+      .property('selectedIndex', 1)
+    d3.select('#plotY')
+      .property('selectedIndex', 3)
+
+    d3.select('#catchmentSelect')
+      .property('selectedIndex', 8)
+
+    setMappedAttribute(d3.select('#catchmentSelect').property('value'), color)
+    toolWindowToggle('map')
+  }
+
+  // remove selectable SVG layer when spatial filter is unchecked or layer is removed
+  function polyFilter () {
+    const tmpLayer = d3.select('#spatialFilterSelect').attr('data-layer')
+    if (d3.select('#spatialFilterCB').property('checked')) {
+      if (tmpLayer != null) {
+        d3.selectAll('.' + tmpLayer).classed('disabled', false)
+        addTopo(topos[tmpLayer])
+      } else {
+        d3.selectAll('.' + tmpLayer).remove()
+      }
+    } else {
+      d3.selectAll('.' + tmpLayer).classed('disabled', true)
+    }
+  }
+
+  setupUi()
 
   d3.select('#spatialFilterCB')
     .on('click', function () {
-      if (this.checked == true) {
+      if (this.checked) {
         d3.select('#spatialFilterSelect').classed('disabled', false)
       } else {
         d3.select('#spatialFilterSelect').classed('disabled', true)
@@ -1026,22 +771,22 @@ function initPage () { // eslint-disable-line
 
   d3.select('#spatialFilterClear')
     .on('click', function () {
-      for (obj in topos.geoIndicators.cf.filters) {
-        if (obj != 'type' && obj != 'geoIndicators') {
+      for (const obj in topos.geoIndicators.cf.filters) {
+        if (obj !== 'type' && obj !== 'geoIndicators') {
           topos.geoIndicators.cf[obj].filterAll()
           topos.geoIndicators.cf.filters[obj] = []
         }
       }
 
-      for (obj in topos.geoIndicators.cf.filters) {
-        if (obj != 'type' && obj != 'geoIndicators' && topos.geoIndicators.cf.filters.type[obj] == 'spatial') {
+      for (const obj in topos.geoIndicators.cf.filters) {
+        if (obj !== 'type' && obj !== 'geoIndicators' && topos.geoIndicators.cf.filters.type[obj] === 'spatial') {
           spatialFilter(obj)
           break
         }
       }
 
-      for (obj in topos.geoIndicators.cf.filters) {
-        if (obj != 'type' && obj != 'geoIndicators' && topos.geoIndicators.cf.filters.type[obj] == 'categorical') {
+      for (const obj in topos.geoIndicators.cf.filters) {
+        if (obj !== 'type' && obj !== 'geoIndicators' && topos.geoIndicators.cf.filters.type[obj] === 'categorical') {
           catFilter(obj)
           break
         }
@@ -1053,18 +798,24 @@ function initPage () { // eslint-disable-line
       d3.select(this).style('display', 'none')
     })
 
-  const optList = { 'Select Layer': '', States: 'layerToggleDiv0', Counties: 'layerToggleDiv1', MLRA: 'layerToggleDiv3', 'HUC-6': 'layerToggleDiv5', 'HUC-8': 'layerToggleDiv6' }
+  const optList = {
+    'Select Layer': '',
+    States: 'layerToggleDiv0',
+    Counties: 'layerToggleDiv1',
+    MLRA: 'layerToggleDiv3',
+    'HUC-6': 'layerToggleDiv5',
+    'HUC-8': 'layerToggleDiv6'
+  }
   const topoArray = [null, 'tl_2017_us_state_wgs84', 'tl_2017_us_county_wgs84', 'mlra_v42_wgs84', 'wbdhu6_wgs84', 'wbdhu8_wgs84']
   d3.select('#spatialFilterSelect')
     .attr('data-layer', null)
     .on('change', function () {
-      if (d3.select('#' + this.value).select('span').style('visibility') == 'hidden') {
+      if (d3.select('#' + this.value).select('span').style('visibility') === 'hidden') {
         changeOverlay(d3.select('#' + this.value)._groups[0][0])
       }
       const tmpLayer = d3.select(document.getElementById('spatialFilterSelect').selectedOptions[0]).attr('data-layer')
       d3.selectAll('.' + d3.select(this).attr('data-layer')).remove()
       d3.select(this).attr('data-layer', tmpLayer)
-      // polyOverlap(tmpLayer);
       polyFilter()
       spatialFilter(tmpLayer)
     })
@@ -1073,78 +824,10 @@ function initPage () { // eslint-disable-line
     .data(d3.keys(optList))
     .enter()
     .append('option')
-    .property('disabled', function (d, i) { if (i == 0) { return 'disabled' } })
+    .property('disabled', function (d, i) { if (i === 0) { return 'disabled' } })
     .attr('value', function (d) { return optList[d] })
     .attr('data-layer', function (d, i) { return topoArray[i] })
     .text(function (d) { return d })
-
-  //* *****Add categories and values to text filtering
-  setCatFilter = function (tmpKeys) {
-    const nonText = ['geoIndicators', 'tl_2017_us_state_wgs84', 'tl_2017_us_county_wgs84', 'mlra_v42_wgs84', 'wbdhu6_wgs84', 'wbdhu8_wgs84'] // List of keys that are NOT for text filtering
-    const text = tmpKeys.filter(function (d) { return nonText.indexOf(d) == -1 })
-    text.forEach(function (d) { topos.geoIndicators.cf.filters.type[d] = 'categorical' })
-    text.splice(0, 0, 'Select category...')
-    d3.select('#catFilterSelect')
-      .on('mousedown', function () { d3.select(this).select('option').style('display', 'none') })
-      .on('change', function () {
-        const tmpCat = d3.select(document.getElementById('catFilterSelect').selectedOptions[0]).attr('data-cat')
-        const tmpArr = topos.geoIndicators.cf[tmpCat + 's'].top(Infinity)
-        let tmpVals = tmpArr.map(function (d) { return d.key })
-        tmpVals = tmpVals.sort()
-        tmpVals.splice(0, 0, 'Select value...')
-        const tmpFeats = d3.select('#valFilterSelect')
-          .classed('disabled', false)
-          .selectAll('option')
-          .data(tmpVals)
-
-        tmpFeats.enter()
-          .append('option')
-          .text(function (d) { return d })
-
-        tmpFeats.text(function (d) { return d })
-
-        tmpFeats.exit().remove()
-
-        d3.select('#valFilterSelect').property('selectedIndex', 0)
-      })
-      .selectAll('options')
-      .data(text)
-      .enter()
-      .append('option')
-      .text(function (d) { return d })
-      .attr('data-cat', function (d) { return d })
-
-    d3.select('#valFilterSelect')
-      .on('mousedown', function () { d3.select(this).select('option').style('display', 'none') })
-      .on('change', function () {
-        if (d3.select('#valFilterSelect').property('selectedIndex') > 0) {
-          const tmpCat = document.getElementById('catFilterSelect').selectedOptions[0].text
-          const tmpVal = document.getElementById('valFilterSelect').selectedOptions[0].text
-
-          if (topos.geoIndicators.cf.filters[tmpCat].indexOf(tmpVal) == -1) {
-            topos.geoIndicators.cf.filters[tmpCat].push(tmpVal)
-            catFilter(tmpCat)
-
-            d3.select('#filterCondDiv')
-              .insert('div', ':first-child')
-              .attr('id', 'filterCond_' + tmpCat.replace(/ /g, '_') + '_' + tmpVal.replace(/ /g, '_'))
-              .html('<p class="filterCondP">' + tmpCat + ' = ' + tmpVal + '<span class="filterCondSpan fa fa-times-circle"></span></p>')
-              .select('span')
-              .property('title', 'Click to remove this filter condition')
-              .on('click', function () {
-                topos.geoIndicators.cf.filters[tmpCat].splice(topos.geoIndicators.cf.filters[tmpCat].indexOf(tmpVal), 1)
-                if (document.getElementById('valFilterSelect').selectedOptions[0].text == tmpVal) {
-                  d3.select('#valFilterSelect').property('selectedIndex', 0)
-                }
-                catFilter(tmpCat)
-                d3.select('#filterCond_' + tmpCat.replace(/ /g, '_') + '_' + tmpVal.replace(/ /g, '_')).remove()
-                if (d3.select('#filterCondDiv').selectAll('div')._groups[0].length == 0) { d3.select('#spatialFilterClear').style('display', 'none') }
-              })
-            d3.select('#spatialFilterClear').style('display', 'block')
-          }
-        }
-      })
-  }
 
   function catFilter (tmpCat) {
     if (topos.geoIndicators.cf.filters[tmpCat].length > 0) {
@@ -1203,15 +886,15 @@ function initPage () { // eslint-disable-line
   $('#catchDisplay').bootstrapToggle({ on: 'YES', off: 'NO', size: 'mini', style: 'on_off', width: '55px' }).change(function () { if ($(this).prop('checked')) { d3.selectAll('.activeTopo').style('visibility', 'visible') } else { d3.selectAll('.activeTopo').style('visibility', 'hidden') } })
 
   d3.select('#catchmentSelect')
-    .on('change', function () { d3.selectAll('.svgSelected').classed('svgSelected', false); changeChoro(this.value, color) })
+    .on('change', function () { d3.selectAll('.svgSelected').classed('svgSelected', false); setMappedAttribute(this.value, color) })
 
-  var color = d3.scaleLinear()
+  const color = d3.scaleLinear()
     .domain([0, 0.25, 0.5, 0.75, 1])
     .range([d3.rgb(68, 2, 86), d3.rgb(59, 82, 139), d3.rgb(33, 145, 140), d3.rgb(42, 176, 127), d3.rgb(253, 231, 37)])
     .interpolate(d3.interpolateRgb)
 
   const tmpDiv = d3.select('#colorScale')
-  for (var i = 0; i < 100; i++) {
+  for (let i = 0; i < 100; i++) {
     tmpDiv.append('div')
       .attr('class', 'colorScaleDiv')
       .style('background', function () { return color(i / 100) })
@@ -1239,7 +922,9 @@ function initPage () { // eslint-disable-line
     .html(d3.select('#plotTitle').html() + '<div class="exitDiv"><span id="hidePlot" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hidePlot')
-    .on('click', function () { toolWindowToggle('plot') })
+    .on('click', function () {
+      return toolWindowToggle('plot')
+    })
 
   d3.select('#plotDiv')
     .append('div')
@@ -1299,7 +984,7 @@ function initPage () { // eslint-disable-line
 
   $('#legendImgDiv').sortable({ appendTo: '#legendImgDiv', containment: '#legendImgDiv', cancel: 'input,textarea,button,select,option', forcePlaceholderSize: true, placeholder: 'sortable-placeholder', helper: 'original', tolerance: 'pointer', stop: function (event, ui) { reorder(event, ui) }, start: function (event, ui) { helperPlaceholder(event, ui) } })
 
-  //* *****Change the layer orders after drag and drop
+  // change the layer orders after drag and drop
   function reorder (tmpEvent, tmpUI) {
     const tmpCnt = tmpEvent.target.children.length
     let i = 0
@@ -1309,18 +994,17 @@ function initPage () { // eslint-disable-line
     }
   }
 
-  //* *****Style the helper and placeholder when dragging/sorting
+  // style the helper and placeholder when dragging/sorting
   function helperPlaceholder (tmpEvent, tmpUI) {
     console.log(tmpUI)
     d3.select('.ui-sortable-placeholder.sortable-placeholder').style('width', d3.select('#' + tmpUI.item[0].id).style('width')).style('height', '37px') // .style("background", "rgba(255,255,255,0.25)");
   }
 
-  //* *****Adds images to the legend
+  // adds images to the legend
   function addLegendImg (tmpName, tmpTitle, tmpLayer, tmpPath) {
+    let tmpOpa = 1
     if (tmpName.includes('surf') || tmpName.includes('mlra')) {
-      var tmpOpa = 0.6
-    } else {
-      var tmpOpa = 1
+      tmpOpa = 0.6
     }
     tmpLayer.setOpacity(tmpOpa)
 
@@ -1380,31 +1064,31 @@ function initPage () { // eslint-disable-line
     d3.select('#legendImgDiv')
       .style('display', 'block')
 
-    if (d3.select('#legendDiv').style('opacity') == 0) {
+    if (d3.select('#legendDiv').style('opacity') === 0) {
       toolWindowToggle('legend')
     }
 
     resizePanels()
   }
 
-  //* *****Removes images to the legend
+  // removes images to the legend
   function remLegendImg (tmpName) {
     d3.select('#' + tmpName + 'Legend').remove()
 
-    if (d3.select('#legendImgDiv').selectAll('div')._groups[0].length == 0) {
+    if (d3.select('#legendImgDiv').selectAll('div')._groups[0].length === 0) {
       d3.select('#legendImgDiv').style('display', 'none')
       d3.select('#legendDefault').style('display', 'block')
     }
   }
 
-  //* *****Change transparency of current legend layer
+  // change transparency of current legend layer
   function layerOpacity (tmpSlider, tmpLayer) {
     const tmpOpacity = tmpSlider.value / 100
     tmpSlider.title = 'Opacity: ' + tmpSlider.value + '%'
     tmpLayer.setOpacity(tmpOpacity)
   }
 
-  //* **Add div for catchment attribute info
+  // add div for catchment attribute info
   d3.select('body')
     .append('div')
     .attr('id', 'catchInfoVals')
@@ -1423,8 +1107,8 @@ function initPage () { // eslint-disable-line
     map.eachLayer(function (layer) {
       i += 1
       //* **Exclude baselayer and points layer
-      if (typeof layer.options.layers !== 'undefined' && layer.options.layers.includes('background') == false && layer.options.layers.includes('countries_wgs84') == false) {
-        if (tmpLayers == '') {
+      if (typeof layer.options.layers !== 'undefined' && layer.options.layers.includes('background') === false && layer.options.layers.includes('countries_wgs84') === false) {
+        if (tmpLayers === '') {
           tmpLayers = layer.options.layers
         } else {
           tmpLayers = layer.options.layers + ',' + tmpLayers
@@ -1451,16 +1135,17 @@ function initPage () { // eslint-disable-line
         let tmpText = ''
         data.features.forEach(function (tmpFeat, j) {
           let tmpID = tmpFeat.id.split('.')[0]
-          if (tmpID != '') {
+          if (tmpID !== '') {
             addInfo(tmpID, tmpFeat.properties[infoIDField[tmpID]])
-          } else if (tmpID == '') {
-            if (tmpID == '') { tmpID = 'aspect_elevation' }
+          } else if (tmpID === '') {
+            if (tmpID === '') {
+              tmpID = 'aspect_elevation'
+            }
+            let tmpObj = 'NULL'
             if (typeof tmpFeat.properties.PALETTE_INDEX !== 'undefined') {
-              var tmpObj = 'PALETTE_INDEX'
+              tmpObj = 'PALETTE_INDEX'
             } else if (typeof tmpFeat.properties.GRAY_INDEX !== 'undefined') {
-              var tmpObj = 'GRAY_INDEX'
-            } else {
-              var tmpObj = 'NULL'
+              tmpObj = 'GRAY_INDEX'
             }
             addInfo(tmpID, Math.round(tmpFeat.properties[tmpObj]))
           } else {
@@ -1468,11 +1153,11 @@ function initPage () { // eslint-disable-line
           }
         })
         d3.select('#infoP').text(tmpText)
-        if (d3.select('#infoDiv').style('opacity') == 0) { toolWindowToggle('info') }
+        if (d3.select('#infoDiv').style('opacity') === 0) { toolWindowToggle('info') }
         resizePanels()
 
         function addInfo (tmpId, tmpInfo) {
-          if (tmpText == '') {
+          if (tmpText === '') {
             tmpText = infoObj[tmpId] + ': ' + tmpInfo
           } else {
             tmpText += '\n' + infoObj[tmpId] + ': ' + tmpInfo
@@ -1482,79 +1167,120 @@ function initPage () { // eslint-disable-line
     })
   }
 
-  // map.addLayer(geoInd);
   reset()
 }
 
-//* *****Change the choropleth style for catchments
-function changeChoro (tmpAttr, color) {
-  d3.selectAll('.activeTopo')
-    .style('fill', function (d) { if (tmpAttr == 'None') { return 'none' } else { return color(d.properties[tmpAttr] / topos.cf.ranges[tmpAttr].max) } })
-    .style('stroke', function () { if (tmpAttr != 'None') { return '#333333' } else { return '' } })
-    .property('data-tt', function (d) { return parseFloat(d.properties[tmpAttr]).toFixed(3) })
-
-  d3.select('#csMin').text(topos.cf.ranges[tmpAttr].min.toFixed(1))
-  d3.select('#csMid').text((((topos.cf.ranges[tmpAttr].max - topos.cf.ranges[tmpAttr].min) / 2) + topos.cf.ranges[tmpAttr].min).toFixed(1))
-  d3.select('#csMax').text(topos.cf.ranges[tmpAttr].max.toFixed(1))
+function setZ (tmpWin) {
+  if (!d3.select('#map').classed('introjs-showElement')) {
+    d3.selectAll('#legendDiv,#infoDiv,#locateDiv,#filterDiv,#pointDiv,#downloadDiv,#plotDiv,#mapDiv')
+      .style('z-index', function () {
+        if (d3.select(this).style('opacity') === 1) {
+          return 1001
+        } else {
+          return 7500
+        }
+      })
+    d3.select(tmpWin).style('z-index', 1002)
+  }
 }
 
-//* *****Use Leaflet to implement a D3 geometric transformation.
+function toolWindowToggle (tmpDiv) {
+  console.log(`toolWindowToggle(${tmpDiv})`)
+
+  const toggleWords = {
+    legend: 'Legend',
+    info: 'Identify',
+    locate: 'Locate',
+    filter: 'Filter',
+    plot: 'Plot',
+    map: 'Catchments'
+  }
+
+  if (d3.select('#' + tmpDiv + 'Div').style('opacity') === '1') {
+    d3.select('#' + tmpDiv + 'Div')
+      .transition()
+      .style('opacity', '0')
+      .style('visibility', 'hidden')
+      .style('display', function () {
+        if (tmpDiv === 'plot') {
+          return 'none'
+        }
+      })
+    d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div')
+      .property('title', 'Click to show ' + toggleWords[tmpDiv] + ' window')
+  } else {
+    d3.select('#' + tmpDiv + 'Div')
+      .transition()
+      .duration(250)
+      .ease(d3.easeCubic)
+      .style('opacity', '1')
+      .style('display', 'block')
+      .style('visibility', 'visible')
+      .on('end', resizePanels)
+    d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div')
+      .property('title', 'Click to hide ' + toggleWords[tmpDiv] + ' window')
+    setZ(d3.select('#' + tmpDiv + 'Div')._groups[0][0])
+  }
+}
+
+function setMappedAttribute (attribute, colorScale) {
+  console.log('setMappedAttribute()', attribute, colorScale)
+  d3.selectAll('.activeTopo')
+    .style('fill', d => {
+      return attribute === 'None' ? 'none' : colorScale(d.properties[attribute] / topos.xf.ranges[attribute].max)
+    })
+    .style('stroke', () => {
+      return attribute !== 'None' ? '#333333' : ''
+    })
+    .property('data-tt', d => {
+      return parseFloat(d.properties[attribute]).toFixed(3)
+    })
+
+  // set legend labels
+  const range = topos.xf.ranges[attribute]
+  d3.select('#csMin').text(range.min.toFixed(1))
+  d3.select('#csMid').text((((range.max - range.min) / 2) + range.min).toFixed(1))
+  d3.select('#csMax').text(range.max.toFixed(1))
+}
+
 function projectPoint (x, y) {
   const point = map.latLngToLayerPoint(new L.LatLng(y, x))
   this.stream.point(point.x, point.y)
 }
 
-//* *****Add topo layer to map
 function addTopo (topo) {
   $(function () {
     $('[data-toggle="tooltip"]').tooltip()
   })
-
-  //* **Move current g to last child (top-most layer)
-  // $(topo.g).appendTo($("#topoSVG"));
 
   const tmpFeats = d3.select(topo.g).selectAll('.' + topo.class)
     .data(topo.topo.features, function (d) { return d.id })
 
   tmpFeats.enter()
     .append('path')
-  // .merge(tmpFeats)
     .attr('d', path)
-  // .attr("class", function(d) { if(d3.select("#hcSelectDiv").classed("disabled") == true && topo.class != "geoIndicators") { return topo.class + " activeTopo disabled"; } else { return topo.class + " activeTopo_geoInd"; } })
     .attr('class', function (d) {
-      if (topo.class != 'geoIndicators') {
-      // if(topos.geoIndicators.cf.filters[topo.class].indexOf(d.id) > -1) {
-      //  return topo.class + " activeTopo svgSelected";
-      // }
-      // else {
+      if (topo.class !== 'geoIndicators') {
         return topo.class + ' activeTopo'
-      // }
       } else {
         return topo.class + ' activeTopo_geoInd'
       }
     })
-  // .property("data-gid", function(d) { return d.properties.geoid; })
     .property('data-attr', function (d) { return d.properties[topo.id] })
     .property('data-tt', function (d) { return d.properties[topo.id] })
-    .attr('data-toggle', function () { if (topo.class == 'geoIndicators') { return 'tooltip' } })
+    .attr('data-toggle', function () { if (topo.class === 'geoIndicators') { return 'tooltip' } })
     .attr('data-container', 'body')
     .attr('data-placement', 'auto')
     .attr('data-html', 'true')
     .attr('title', function (d) { return d.properties[topo.id] })
     .style('stroke-width', 1 + ((map.getZoom() - 9) / 100))
-  // .style("fill", function(d) { if(d.geometry.type == "Point") { if(d.properties.Public == true) { return "cyan"; } else { return "fuchsia"; } } else { return ""; } })
-  // .style("fill-opacity", function(d) { if(d.geometry.type == "Point") { return "1"; } else { return ""; } })
-  // .style("stroke", function(d) { if(d.geometry.type == "Point") { return "darkblue"; } else { return ""; } })
-  // .style("stroke-opacity", function(d) { if(d.geometry.type == "Point") { return "1"; } else { return ""; } })
-  // .on("mouseenter", function() { d3.select(this).classed("svgHover", true); })
-  // .on("mouseleave", function() { d3.select(this).classed("svgHover", false); })
-    .on('mouseenter', function () { d3.select(this).classed('svgHover', true); if (topo.class != 'geoIndicators') { if (d3.select(this).style('visibility') == 'visible') { showIt(d3.select(this).property('data-tt')); resizeTooltip() } } })
-    .on('mousemove', function () { if (topo.class != 'geoIndicators') { tooltip.style('top', (d3.event.pageY - 50) + 'px').style('left', (d3.event.pageX) + 'px'); resizeTooltip() } })
+    .on('mouseenter', function () { d3.select(this).classed('svgHover', true); if (topo.class !== 'geoIndicators') { if (d3.select(this).style('visibility') === 'visible') { showIt(d3.select(this).property('data-tt')); resizeTooltip() } } })
+    .on('mousemove', function () { if (topo.class !== 'geoIndicators') { tooltip.style('top', (d3.event.pageY - 50) + 'px').style('left', (d3.event.pageX) + 'px'); resizeTooltip() } })
     .on('mouseleave', function () { d3.select(this).classed('svgHover', false); tooltip.style('visibility', 'hidden') })
     .call(d3.drag()) //* **Prevents default for click event when the map is being dragged
     .on('click', function (d) {
-      if (d3.select(this).style('visibility') == 'visible') {
-        const tmpPath = this
+      if (d3.select(this).style('visibility') === 'visible') {
+        // const tmpPath = this
         d3.selectAll('.svgSelected').classed('svgSelected', false)
         d3.select(this).classed('svgSelected', true)
 
@@ -1562,16 +1288,17 @@ function addTopo (topo) {
           .attr('data-props', JSON.stringify(d.properties))
 
         makePlot(d.properties)
-        if (d3.select('#plotDiv').style('opacity') == 0) { toolWindowToggle('plot') }
+        if (d3.select('#plotDiv').style('opacity') === 0) {
+          toolWindowToggle('plot')
+        }
       }
     })
     .on('touchstart', function () { d3.select(this).classed('svgHover', true) })
-    .on('touchend', function () { d3.select(this).classed('svgHover', false); if (d3.select(this).classed('geoIndicators') == false) { if (d3.select(this).classed('svgSelected') == true) { d3.select(this).classed('svgSelected', false) } else { d3.select(this).classed('svgSelected', true) } } })
+    .on('touchend', function () { d3.select(this).classed('svgHover', false); if (d3.select(this).classed('geoIndicators') === false) { if (d3.select(this).classed('svgSelected') === true) { d3.select(this).classed('svgSelected', false) } else { d3.select(this).classed('svgSelected', true) } } })
 
   tmpFeats.exit().remove()
 }
 
-//* *****Make a bivariate surface plot
 function makePlot (props) {
   // console.log(props);
 
@@ -1581,13 +1308,13 @@ function makePlot (props) {
   Y.var = d3.select('#plotY').property('value')
   X.var = d3.select('#plotX').property('value')
 
-  Y.min = topos.cf.ranges[Y.var].min
-  Y.max = topos.cf.ranges[Y.var].max
+  Y.min = topos.xf.ranges[Y.var].min
+  Y.max = topos.xf.ranges[Y.var].max
   Y.range = Y.max - Y.min
   Y.step = Y.range / 100
 
-  X.min = topos.cf.ranges[X.var].min
-  X.max = topos.cf.ranges[X.var].max
+  X.min = topos.xf.ranges[X.var].min
+  X.max = topos.xf.ranges[X.var].max
   X.range = X.max - X.min
   X.step = X.range / 100
 
@@ -1637,17 +1364,38 @@ function makePlot (props) {
 
   const cs = [['0.0', 'rgb(68, 2, 86)'], ['0.25', 'rgb(59, 82, 139)'], ['0.5', 'rgb(33, 145, 140)'], ['0.75', 'rgb(42, 176, 127)'], ['1.0', 'rgb(253, 231, 37)']]
 
-  // var data = [{ "x": [], "y": [], "z": [], "type": "surface" }]; //"type": "heatmap"
-  var data = [{ x: [], y: [], z: [], type: 'contour', colorscale: cs }, { x: [props[X.var]], y: [props[Y.var]], z: [props.occ_current], mode: 'markers', type: 'scatter', marker: { size: 8, color: 'rgb(255, 77, 255)', line: { width: 1, color: 'black' } } }]
+  const data = [
+    {
+      x: [],
+      y: [],
+      z: [],
+      type: 'contour',
+      colorscale: cs
+    }, {
+      x: [props[X.var]],
+      y: [props[Y.var]],
+      z: [props.occ_current],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 8,
+        color: 'rgb(255, 77, 255)',
+        line: {
+          width: 1,
+          color: 'black'
+        }
+      }
+    }
+  ]
   let a = -1
 
-  for (j = Y.min; j <= Y.max + (Y.max * 0.001); j += Y.step) {
+  for (let j = Y.min; j <= Y.max + (Y.max * 0.001); j += Y.step) {
     data[0].y.push(j)
     propsCopy[Y.var] = j
     data[0].z.push([])
     a += 1
-    for (i = X.min; i <= X.max + (X.max * 0.001); i += X.step) {
-      if (j == Y.min) { data[0].x.push(i) }
+    for (let i = X.min; i <= X.max + (X.max * 0.001); i += X.step) {
+      if (j === Y.min) { data[0].x.push(i) }
       propsCopy[X.var] = i
       const tmpOcc = calcOcc(propsCopy)
       if (!isNaN(props.mean_jul_temp)) {
@@ -1655,8 +1403,6 @@ function makePlot (props) {
       }
     }
   }
-
-  // console.log(data);
 
   const layout = {
     title: 'Brook trout occupancy for<br>catchment <span id="selCatchID">' + props.FEATUREID + '</span>',
@@ -1688,16 +1434,14 @@ function makePlot (props) {
   d3.select('#catchInfoVals')
     .text(function () {
       let tmpText = ''
-      for (key in props) {
+      for (const key in props) {
         tmpText += key + ':   ' + props[key] + '\n'
       }
       return tmpText
     })
 }
 
-//* *****Calculate occupancy
 function calcOcc (props) {
-  // console.log(props);
   const tmpFixed = (topos.model.summary_glmm.Intercept.Estimate) +
     (topos.model.summary_glmm.AreaSqKM.Estimate * ((props.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
     (topos.model.summary_glmm.summer_prcp_mm.Estimate * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
@@ -1710,32 +1454,28 @@ function calcOcc (props) {
     (topos.model.summary_glmm['mean_jul_temp:forest'].Estimate * ((props.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd) * ((props.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
     (topos.model.summary_glmm['summer_prcp_mm:forest'].Estimate * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd) * ((props.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd))
 
+  let tmpRandom = 0
   if (typeof topos.model.ranef_glmm[props.huc10.toString()] !== 'undefined') {
-    const tmpRandom = (topos.model.ranef_glmm[props.huc10.toString()].Intercept) +
+    tmpRandom = (topos.model.ranef_glmm[props.huc10.toString()].Intercept) +
       (topos.model.ranef_glmm[props.huc10.toString()].AreaSqKM * ((props.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
       (topos.model.ranef_glmm[props.huc10.toString()].agriculture * ((props.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
       (topos.model.ranef_glmm[props.huc10.toString()].summer_prcp_mm * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
       (topos.model.ranef_glmm[props.huc10.toString()].mean_jul_temp * ((props.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd))
-
-    var tmpSum = tmpFixed + tmpRandom
-  } else {
-    var tmpSum = tmpFixed
   }
 
+  const tmpSum = tmpFixed + tmpRandom
   const tmpOcc = Math.exp(tmpSum) / (1 + Math.exp(tmpSum))
   return tmpOcc
 }
 
-//* ****Reposition the SVG to cover the features.
 function reset () {
   d3.select('#map').style('cursor', '')
 
-  // path.pointRadius(map.getZoom()/2);
-
-  //* *****Set bounds () NOTE: These will need to change if outside points are added and if so the max zoom might need to be lowered
-  var tmpPoint = map.latLngToLayerPoint(new L.LatLng(17, -170))
+  // set bounds
+  // NOTE: These will need to change if outside points are added and if so the max zoom might need to be lowered
+  let tmpPoint = map.latLngToLayerPoint(new L.LatLng(17, -170))
   const bottomLeft = [tmpPoint.x, tmpPoint.y]
-  var tmpPoint = map.latLngToLayerPoint(new L.LatLng(72, -64))
+  tmpPoint = map.latLngToLayerPoint(new L.LatLng(72, -64))
   const topRight = [tmpPoint.x, tmpPoint.y]
 
   topoSVG.attr('width', topRight[0] - bottomLeft[0])
@@ -1743,12 +1483,10 @@ function reset () {
     .style('margin-left', bottomLeft[0] + 'px')
     .style('margin-top', topRight[1] + 'px')
 
-  const translation = -bottomLeft[0] + ',' + -topRight[1]
-
-  //* *****Select all layer g elements
+  // select all layer g elements
   const tmpG = topoSVG.selectAll('g')
 
-  //* *****Loop through each g element and transform the path
+  // loop through each g element and transform the path
   tmpG._groups[0].forEach(function (g) {
     const curG = d3.select(g)
     const feature = curG.selectAll('path')
@@ -1757,19 +1495,16 @@ function reset () {
   })
 }
 
-//* *****Remove topo layer from map
 function removeTopo (topo) {
   d3.select(topo.g).selectAll('.' + topo.class).remove()
 }
 
-//* ******Show crossings attribute in tooltip
 function showIt (tmpID) {
   tooltip.text(tmpID)
   tooltip.style('visibility', 'visible')
   tooltip.property('title', tmpID)
 }
 
-//* *****Make sure tooltip is in window bounds
 function resizeTooltip () {
   const mapRect = document.getElementById('map').getBoundingClientRect()
   const tmpWindows = ['d3Tooltip']
@@ -1785,7 +1520,6 @@ function resizeTooltip () {
   })
 }
 
-//* *****Adjust div position to ensure that it isn't overflowing window
 function resizePanels () {
   const bodyRect = document.body.getBoundingClientRect()
   const tmpWindows = ['infoDiv', 'pointDiv', 'locateDiv', 'legendDiv', 'filterDiv', 'downloadDiv', 'plotDiv', 'mapDiv']
@@ -1804,7 +1538,6 @@ function resizePanels () {
   d3.select('#legendImgDiv').style('min-width', legRect.width + 'px')
 }
 
-//* *****Filter geoInd points by selected spatial features
 function spatialFilter (tmpLayer) {
   //* **Filter using crossfilter
   // var tmpLayer = d3.select("#spatialFilterSelect").attr("data-layer");
@@ -1813,11 +1546,13 @@ function spatialFilter (tmpLayer) {
     // d3.selectAll(".svgSelected").each(function(d) { tmpID.push(d.id); });
 
     topos.geoIndicators.cf[tmpLayer].filterAll() //* **Remove spatial filters for layer
+    let tmpGeo
+    let geoIDs
     if (tmpID.length > 0) {
       topos.geoIndicators.cf[tmpLayer].filterFunction(function (d) { return tmpID.indexOf(d) > -1 })
 
-      var tmpGeo = topos.geoIndicators.cf[tmpLayer].bottom(Infinity)
-      var geoIDs = tmpGeo.map(function (d) { return d.geoIndicators })
+      tmpGeo = topos.geoIndicators.cf[tmpLayer].bottom(Infinity)
+      geoIDs = tmpGeo.map(function (d) { return d.geoIndicators })
       d3.selectAll('.geoIndicators')
         .style('display', function (d) {
           if (geoIDs.indexOf(d.id) > -1) {
@@ -1827,8 +1562,8 @@ function spatialFilter (tmpLayer) {
           }
         })
     } else {
-      var tmpGeo = topos.geoIndicators.cf[tmpLayer].bottom(Infinity)
-      var geoIDs = tmpGeo.map(function (d) { return d.geoIndicators })
+      tmpGeo = topos.geoIndicators.cf[tmpLayer].bottom(Infinity)
+      geoIDs = tmpGeo.map(function (d) { return d.geoIndicators })
       d3.selectAll('.geoIndicators')
         .style('display', function (d) {
           if (geoIDs.indexOf(d.id) > -1) {
@@ -1840,43 +1575,4 @@ function spatialFilter (tmpLayer) {
     }
     d3.select('#filterCnt').text(topos.geoIndicators.cf.geoIndicators.top(Infinity).length)
   }
-
-  /*
-  //***Filter spatially
-  var tmpSel = [];
-  d3.selectAll(".svgSelected").each(function(d) { tmpSel.push(d); });
-  if(tmpSel.length > 0) {
-    var polyArr = [];
-    tmpSel.forEach(function(feat) {
-      if(feat.geometry.type == "Polygon") {
-        polyArr.push(turf.polygon(feat.geometry.coordinates));
-      }
-      else {  //MultiPolygon
-        feat.geometry.coordinates.forEach(function(coords) {
-          polyArr.push(turf.polygon(coords));
-        });
-      }
-    });
-
-    d3.selectAll(".geoIndicators")
-      .style("display", function(d) {
-        var tmpBi = 0;
-        polyArr.some(function(poly) {
-          if(turf.booleanPointInPolygon(d, poly)  == true) {
-            tmpBi = 1;
-          }
-          return tmpBi == 1;
-        });
-        if(tmpBi == 1) {
-          return "block";
-        }
-        else {
-          return "none";
-        }
-      });
-  }
-  else {
-    d3.selectAll(".geoIndicators").style("display", "block");
-  }
-*/
 }

@@ -1,5 +1,5 @@
 {
-  "name": "refugia",
+  "name": "sheds-refugia",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -7,23 +7,25 @@
     "lib": "lib"
   },
   "scripts": {
+    "start": "npx http-server",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/walkerjeffd/refugia.git"
+    "url": "git+https://github.com/walkerjeffd/sheds-refugia.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/walkerjeffd/refugia/issues"
+    "url": "https://github.com/walkerjeffd/sheds-refugia/issues"
   },
-  "homepage": "https://github.com/walkerjeffd/refugia#readme",
+  "homepage": "https://github.com/walkerjeffd/sheds-refugia#readme",
   "devDependencies": {
     "eslint": "^7.19.0",
     "eslint-config-standard": "^16.0.2",
     "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^4.2.1"
+    "eslint-plugin-promise": "^4.2.1",
+    "http-server": "^14.1.1"
   }
 }
