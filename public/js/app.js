@@ -65,7 +65,7 @@ function setupUi () {
           map.fitBounds([[41.5, -74], [43, -69.5]])
           break
         default:
-          toolWindowToggle(d)
+          toggleWindow(d)
           break
       }
     })
@@ -96,7 +96,7 @@ function setupUi () {
     .html(d3.select('#pointTitle').html() + '<div class="exitDiv"><span id="hidePoint" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hidePoint')
-    .on('click', function () { toolWindowToggle('point') })
+    .on('click', function () { toggleWindow('point') })
 
   d3.select('#pointDiv')
     .append('div')
@@ -124,7 +124,7 @@ function setupUi () {
     .html(d3.select('#infoTitle').html() + '<div class="exitDiv"><span id="hideInfo" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideInfo')
-    .on('click', function () { toolWindowToggle('info') })
+    .on('click', function () { toggleWindow('info') })
 
   d3.select('#infoDiv')
     .append('div')
@@ -150,7 +150,7 @@ function setupUi () {
     .html(d3.select('#downloadTitle').html() + '<div class="exitDiv"><span id="hideDownload" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideDownload')
-    .on('click', function () { toolWindowToggle('download') })
+    .on('click', function () { toggleWindow('download') })
 
   d3.select('#downloadDiv')
     .append('div')
@@ -196,7 +196,7 @@ function setupUi () {
     .html(d3.select('#filterTitle').html() + '<div class="exitDiv"><span id="hideFilter" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideFilter')
-    .on('click', function () { toolWindowToggle('filter') })
+    .on('click', function () { toggleWindow('filter') })
 
   d3.select('#filterDiv')
     .append('div')
@@ -324,7 +324,7 @@ function initPage () { // eslint-disable-line
     .html(d3.select('#locateTitle').html() + '<div class="exitDiv"><span id="hideLocate" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideLocate')
-    .on('click', function () { toolWindowToggle('locate') })
+    .on('click', function () { toggleWindow('locate') })
 
   d3.select('#locateDiv')
     .append('div')
@@ -637,7 +637,8 @@ function initPage () { // eslint-disable-line
     d3.tsv('data/model/1.2.2/df_app_data.tsv'),
     d3.csv('data/model/1.2.2/df_z_group.csv'),
     d3.csv('data/model/1.2.2/ranef_glmm.csv'),
-    d3.csv('data/model/1.2.2/summary_glmm.csv')
+    d3.csv('data/model/1.2.2/summary_glmm.csv'),
+    d3.json('data/model/2.0.0/bto-model-v2.0.0-params.json')
   ]).then(render)
 
   function render (data) {
@@ -656,7 +657,6 @@ function initPage () { // eslint-disable-line
       // topos.xf[key + 's'] = topos.xf[key].group() //* **Probably not necessary to make groups since we're not graphing
       topos.xf[key].filterFunction(d => d > -Infinity)
 
-      console.log('key', key, topos.xf[key].bottom(1))
       topos.xf.ranges[key] = {
         min: parseFloat(topos.xf[key].bottom(1)[0][key]),
         max: parseFloat(topos.xf[key].top(1)[0][key])
@@ -680,6 +680,8 @@ function initPage () { // eslint-disable-line
     topos.model.z_group = {}
     topos.model.ranef_glmm = {}
     topos.model.summary_glmm = {}
+    topos.model.params = data[5]
+    topos.model.params.randomMap = d3.map(data[5].random, d => d.huc8)
 
     data[1].forEach(function (row) {
       const tmpObj = {}
@@ -712,7 +714,11 @@ function initPage () { // eslint-disable-line
     addTopo(topos.catchments_ma)
 
     d3.select('#plotY')
-      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
+      .on('change', function () {
+        if (d3.select('#plotDiv').attr('data-props') != null) {
+          makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        }
+      })
       .selectAll('option')
       .data(data[1].columns.slice(2, 8))
       .enter()
@@ -720,7 +726,11 @@ function initPage () { // eslint-disable-line
       .text(function (d) { return d })
 
     d3.select('#plotX')
-      .on('change', function () { if (d3.select('#plotDiv').attr('data-props') != null) { makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props'))) } })
+      .on('change', function () {
+        if (d3.select('#plotDiv').attr('data-props') != null) {
+          makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        }
+      })
       .selectAll('option')
       .data(data[1].columns.slice(2, 8))
       .enter()
@@ -736,7 +746,7 @@ function initPage () { // eslint-disable-line
       .property('selectedIndex', 8)
 
     setMappedAttribute(d3.select('#catchmentSelect').property('value'), color)
-    toolWindowToggle('map')
+    toggleWindow('map')
   }
 
   // remove selectable SVG layer when spatial filter is unchecked or layer is removed
@@ -869,7 +879,7 @@ function initPage () { // eslint-disable-line
     .html(d3.select('#mapTitle').html() + '<div class="exitDiv"><span id="hideMap" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideMap')
-    .on('click', function () { toolWindowToggle('map') })
+    .on('click', function () { toggleWindow('map') })
 
   d3.select('#mapDiv')
     .append('div')
@@ -923,7 +933,7 @@ function initPage () { // eslint-disable-line
 
   d3.select('#hidePlot')
     .on('click', function () {
-      return toolWindowToggle('plot')
+      return toggleWindow('plot')
     })
 
   d3.select('#plotDiv')
@@ -971,7 +981,7 @@ function initPage () { // eslint-disable-line
     .html(d3.select('#legendTitle').html() + '<div class="exitDiv"><span id="hideLegend" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
 
   d3.select('#hideLegend')
-    .on('click', function () { toolWindowToggle('legend') })
+    .on('click', function () { toggleWindow('legend') })
 
   d3.select('#legendDiv')
     .append('div')
@@ -1065,7 +1075,7 @@ function initPage () { // eslint-disable-line
       .style('display', 'block')
 
     if (d3.select('#legendDiv').style('opacity') === 0) {
-      toolWindowToggle('legend')
+      toggleWindow('legend')
     }
 
     resizePanels()
@@ -1153,7 +1163,7 @@ function initPage () { // eslint-disable-line
           }
         })
         d3.select('#infoP').text(tmpText)
-        if (d3.select('#infoDiv').style('opacity') === 0) { toolWindowToggle('info') }
+        if (d3.select('#infoDiv').style('opacity') === 0) { toggleWindow('info') }
         resizePanels()
 
         function addInfo (tmpId, tmpInfo) {
@@ -1170,7 +1180,8 @@ function initPage () { // eslint-disable-line
   reset()
 }
 
-function setZ (tmpWin) {
+function setZ (el) {
+  // console.log('setZ()', el)
   if (!d3.select('#map').classed('introjs-showElement')) {
     d3.selectAll('#legendDiv,#infoDiv,#locateDiv,#filterDiv,#pointDiv,#downloadDiv,#plotDiv,#mapDiv')
       .style('z-index', function () {
@@ -1180,14 +1191,14 @@ function setZ (tmpWin) {
           return 7500
         }
       })
-    d3.select(tmpWin).style('z-index', 1002)
+    d3.select(el).style('z-index', 1002)
   }
 }
 
-function toolWindowToggle (tmpDiv) {
-  console.log(`toolWindowToggle(${tmpDiv})`)
+function toggleWindow (name) {
+  console.log(`toggleWindow(${name})`)
 
-  const toggleWords = {
+  const labels = {
     legend: 'Legend',
     info: 'Identify',
     locate: 'Locate',
@@ -1196,20 +1207,22 @@ function toolWindowToggle (tmpDiv) {
     map: 'Catchments'
   }
 
-  if (d3.select('#' + tmpDiv + 'Div').style('opacity') === '1') {
-    d3.select('#' + tmpDiv + 'Div')
+  if (d3.select('#' + name + 'Div').style('opacity') === '1') {
+    // hide
+    d3.select('#' + name + 'Div')
       .transition()
       .style('opacity', '0')
       .style('visibility', 'hidden')
       .style('display', function () {
-        if (tmpDiv === 'plot') {
+        if (name === 'plot') {
           return 'none'
         }
       })
-    d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div')
-      .property('title', 'Click to show ' + toggleWords[tmpDiv] + ' window')
+    d3.select('#hc' + name.charAt(0).toUpperCase() + name.slice(1) + 'Div')
+      .property('title', 'Click to show ' + labels[name] + ' window')
   } else {
-    d3.select('#' + tmpDiv + 'Div')
+    // show
+    d3.select('#' + name + 'Div')
       .transition()
       .duration(250)
       .ease(d3.easeCubic)
@@ -1217,9 +1230,9 @@ function toolWindowToggle (tmpDiv) {
       .style('display', 'block')
       .style('visibility', 'visible')
       .on('end', resizePanels)
-    d3.select('#hc' + tmpDiv.charAt(0).toUpperCase() + tmpDiv.slice(1) + 'Div')
-      .property('title', 'Click to hide ' + toggleWords[tmpDiv] + ' window')
-    setZ(d3.select('#' + tmpDiv + 'Div')._groups[0][0])
+    d3.select('#hc' + name.charAt(0).toUpperCase() + name.slice(1) + 'Div')
+      .property('title', 'Click to hide ' + labels[name] + ' window')
+    setZ(d3.select('#' + name + 'Div')._groups[0][0])
   }
 }
 
@@ -1289,7 +1302,7 @@ function addTopo (topo) {
 
         makePlot(d.properties)
         if (d3.select('#plotDiv').style('opacity') === 0) {
-          toolWindowToggle('plot')
+          toggleWindow('plot')
         }
       }
     })
@@ -1300,13 +1313,15 @@ function addTopo (topo) {
 }
 
 function makePlot (props) {
-  // console.log(props);
+  console.log('makePlot', props)
 
   const Y = {}
   const X = {}
 
   Y.var = d3.select('#plotY').property('value')
   X.var = d3.select('#plotX').property('value')
+
+  console.log('vars:', X.var, Y.var)
 
   Y.min = topos.xf.ranges[Y.var].min
   Y.max = topos.xf.ranges[Y.var].max
@@ -1441,31 +1456,41 @@ function makePlot (props) {
     })
 }
 
-function calcOcc (props) {
-  const tmpFixed = (topos.model.summary_glmm.Intercept.Estimate) +
-    (topos.model.summary_glmm.AreaSqKM.Estimate * ((props.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
-    (topos.model.summary_glmm.summer_prcp_mm.Estimate * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-    (topos.model.summary_glmm.mean_jul_temp.Estimate * ((props.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd)) +
-    (topos.model.summary_glmm.forest.Estimate * ((props.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
-    (topos.model.summary_glmm.allonnet.Estimate * ((props.allonnet - topos.model.z_group.allonnet.mean) / topos.model.z_group.allonnet.sd)) +
-    (topos.model.summary_glmm.devel_hi.Estimate * ((props.devel_hi - topos.model.z_group.devel_hi.mean) / topos.model.z_group.devel_hi.sd)) +
-    (topos.model.summary_glmm.agriculture.Estimate * ((props.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
-    (topos.model.summary_glmm['AreaSqKM:summer_prcp_mm'].Estimate * ((props.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd) * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-    (topos.model.summary_glmm['mean_jul_temp:forest'].Estimate * ((props.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd) * ((props.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
-    (topos.model.summary_glmm['summer_prcp_mm:forest'].Estimate * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd) * ((props.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd))
+function calcOcc (x) {
+  const params = topos.model.params
+  const std = params.std
+  const fixed = params.fixed
 
-  let tmpRandom = 0
-  if (typeof topos.model.ranef_glmm[props.huc10.toString()] !== 'undefined') {
-    tmpRandom = (topos.model.ranef_glmm[props.huc10.toString()].Intercept) +
-      (topos.model.ranef_glmm[props.huc10.toString()].AreaSqKM * ((props.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
-      (topos.model.ranef_glmm[props.huc10.toString()].agriculture * ((props.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
-      (topos.model.ranef_glmm[props.huc10.toString()].summer_prcp_mm * ((props.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-      (topos.model.ranef_glmm[props.huc10.toString()].mean_jul_temp * ((props.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd))
+  // const sumFixed = (topos.model.summary_glmm.Intercept.Estimate) +
+  //   (topos.model.summary_glmm.AreaSqKM.Estimate * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
+  //   (topos.model.summary_glmm.summer_prcp_mm.Estimate * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
+  //   (topos.model.summary_glmm.mean_jul_temp.Estimate * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd)) +
+  //   (topos.model.summary_glmm.forest.Estimate * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
+  //   (topos.model.summary_glmm.allonnet.Estimate * ((x.allonnet - topos.model.z_group.allonnet.mean) / topos.model.z_group.allonnet.sd)) +
+  //   (topos.model.summary_glmm.devel_hi.Estimate * ((x.devel_hi - topos.model.z_group.devel_hi.mean) / topos.model.z_group.devel_hi.sd)) +
+  //   (topos.model.summary_glmm.agriculture.Estimate * ((x.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
+  //   (topos.model.summary_glmm['AreaSqKM:summer_prcp_mm'].Estimate * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd) * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
+  //   (topos.model.summary_glmm['mean_jul_temp:forest'].Estimate * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd) * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
+  //   (topos.model.summary_glmm['summer_prcp_mm:forest'].Estimate * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd) * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd))
+
+  // if (typeof topos.model.ranef_glmm[x.huc10.toString()] !== 'undefined') {
+  //   sumRandom = (topos.model.ranef_glmm[x.huc10.toString()].Intercept) +
+  //     (topos.model.ranef_glmm[x.huc10.toString()].AreaSqKM * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
+  //     (topos.model.ranef_glmm[x.huc10.toString()].agriculture * ((x.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
+  //     (topos.model.ranef_glmm[x.huc10.toString()].summer_prcp_mm * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
+  //     (topos.model.ranef_glmm[x.huc10.toString()].mean_jul_temp * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd))
+  // }
+  const sumFixed = fixed.intercept + fixed.mean_jul_temp * (x.mean_jul_temp - std.mean_jul_temp.mean) / std.mean_jul_temp.sd
+
+  let sumRandom = 0
+  const huc8 = x.huc10.substr(0, 8)
+  if (topos.model.params.randomMap.has(huc8)) {
+    sumRandom = topos.model.params.randomMap.get(huc8).intercept
   }
 
-  const tmpSum = tmpFixed + tmpRandom
-  const tmpOcc = Math.exp(tmpSum) / (1 + Math.exp(tmpSum))
-  return tmpOcc
+  const y = sumFixed + sumRandom
+  const prob = Math.exp(y) / (1 + Math.exp(y))
+  return prob
 }
 
 function reset () {
