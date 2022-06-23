@@ -8,9 +8,14 @@ library(lme4)
 
 # load catchments ---------------------------------------------------------
 
-catchments_topojson <- read_json("../data/geojson/catchments_ma.json")
+catchments_topojson <- read_json("../public/data/geojson/catchments_ma.json")
 featureids <- map_dbl(catchments_topojson$objects$catchments_ma$geometries,  ~ .x$properties$FEATUREID)
 
+model_wd <- "~/data/ecosheds/temp-model/1.3.0/"
+
+stopifnot(dir.exists(model_wd))
+
+m_in <- readRDS(file.path(model_wd, "model-input.rds"))
 
 # covariates --------------------------------------------------------------
 # df_app_data.tsv
@@ -29,35 +34,54 @@ featureids <- map_dbl(catchments_topojson$objects$catchments_ma$geometries,  ~ .
 #   occ_air_6
 
 covariates_variables <- c(
-  "FEATUREID",
-  "huc10",
+  "featureid",
+  "huc8",
+  
   "AreaSqKM",
-  "summer_prcp_mm",
-  "mean_jul_temp",
   "forest",
-  "allonnet",
   "devel_hi",
   "agriculture",
+  
+  "summer_prcp_mm",
+  
+  "mean_jul_temp",
+  
   "occ_current",
   "occ_air_2",
   "occ_air_4",
   "occ_air_6"
 )
 
-bto_covariates <- read_rds("../../data/bto-model/1.2.2/data-covariates.rds")
-bto_huc <- read_rds("../../data/bto-model/1.2.2/data-huc.rds")
-bto_temp <- read_rds("../../data/bto-model/1.2.2/data-temp.rds")
-bto_predict <- read_rds("../../data/bto-model/1.2.2/model-predict.rds")
+covariates <- readRDS(file.path(model_wd, "data-covariates.rds")) %>%
+  select(
+    featureid,
+    AreaSqKM,
+    forest,
+    devel_hi,
+    agriculture
+  )
 
-app_data <- bto_covariates %>% 
-  full_join(bto_huc, by = "featureid") %>% 
-  full_join(bto_temp, by = "featureid") %>% 
-  full_join(bto_predict, by = "featureid") %>% 
+summer_prcp_mm <- read_rds("../../../../data/ecosheds/bto-model/1.4.0/data-covariates.rds") %>% 
+  select(featureid, summer_prcp_mm)
+
+huc <- read_rds("../../../../data/ecosheds/bto-model/1.4.0/data-huc.rds") %>% 
+  select(featureid, huc8)
+
+temp_model <- read_rds("../../../../data/ecosheds/temp-model/1.3.0/model-predict-derived.rds") %>% 
+  select(featureid, mean_jul_temp)
+
+bto_model <- read_rds("../../../../data/ecosheds/bto-model/2.0.0/bto-model-v2.0.0.rds")$pred %>% 
+  select(featureid, starts_with("occ_"))
+
+attributes <- huc %>% 
+  full_join(covariates, by = "featureid") %>% 
+  full_join(summer_prcp_mm, by = "featureid") %>% 
+  full_join(temp_model, by = "featureid") %>% 
+  full_join(bto_model, by = "featureid") %>% 
   filter(featureid %in% featureids) %>% 
-  rename(FEATUREID = featureid) %>% 
-  select(!!covariates_variables)
+  select(all_of(covariates_variables))
 
-write_tsv(app_data, "../data/model/dev/df_app_data.tsv")
+write_csv(attributes, "../public/data/attributes.csv", na = "")
 
 devapp_data_existing <- read_tsv("../data/model/1.2.2/df_app_data.tsv")
 setdiff(app_data$FEATUREID, app_data_existing$FEATUREID)

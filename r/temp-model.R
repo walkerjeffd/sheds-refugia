@@ -11,7 +11,9 @@ library(DBI)
 
 featureid <- 201411588
 
-model_wd <- "~/Projects/sheds/data/temp-model/1.2.0/"
+model_wd <- "~/data/ecosheds/temp-model/1.3.0/"
+
+stopifnot(dir.exists(model_wd))
 
 
 # data --------------------------------------------------------------------
@@ -23,6 +25,7 @@ df_huc <- readRDS(file.path(model_wd, "data-huc.rds"))
 
 m_in <- readRDS(file.path(model_wd, "model-input.rds"))
 m_out <- readRDS(file.path(model_wd, "model-output.rds"))
+variable_std <- m_in$std
 
 # df_cov_std <- m_in$std
 # cov_list <- m_out$covs
@@ -38,44 +41,44 @@ m_out <- readRDS(file.path(model_wd, "model-output.rds"))
 #   year = m_out$results$mean$B.year
 # )
 
-df_beta_fixed <- tibble(
+beta_fixed <- tibble(
   name = m_out$covs$fixed.ef,
   beta = m_out$results$mean$B.0
 )
 
-df_beta_site <- as_tibble(m_out$results$mean$B.site, .name_repair = "unique")
-names(df_beta_site) <- m_out$covs$site.ef
-df_beta_site$featureid <- m_in$ids$featureid$featureid
-df_beta_site <- df_beta_site %>%
+beta_site <- as_tibble(m_out$results$mean$B.site, .name_repair = "unique")
+names(beta_site) <- m_out$covs$site.ef
+beta_site$featureid <- m_in$ids$featureid$featureid
+beta_site <- beta_site %>%
   pivot_longer(-featureid, values_to = "beta")
 
-df_beta_huc <- as_tibble(m_out$results$mean$B.huc, .name_repair = "unique")
-names(df_beta_huc) <- m_out$covs$huc.ef
-df_beta_huc$huc8 <- m_in$ids$huc8$huc8
-df_beta_huc <- df_beta_huc %>%
+beta_huc <- as_tibble(m_out$results$mean$B.huc, .name_repair = "unique")
+names(beta_huc) <- m_out$covs$huc.ef
+beta_huc$huc8 <- m_in$ids$huc8$huc8
+beta_huc <- beta_huc %>%
   pivot_longer(-huc8, values_to = "beta")
 
-df_beta_year <- as_tibble(m_out$results$mean$B.year, .name_repair = "unique")
-names(df_beta_year) <- m_out$covs$year.ef
-df_beta_year$year <- m_in$ids$year$year
-df_beta_year <- df_beta_year %>%
+beta_year <- as_tibble(m_out$results$mean$B.year, .name_repair = "unique")
+names(beta_year) <- m_out$covs$year.ef
+beta_year$year <- m_in$ids$year$year
+beta_year <- beta_year %>%
   pivot_longer(-year, values_to = "beta")
 
-df_beta_site_mean <- df_beta_site %>%
+beta_site_mean <- beta_site %>%
   group_by(name) %>%
   summarise(beta = mean(beta))
-df_beta_huc_mean <- df_beta_huc %>%
+beta_huc_mean <- beta_huc %>%
   group_by(name) %>%
   summarise(beta = mean(beta))
-df_beta_year_mean <- df_beta_year %>%
+beta_year_mean <- beta_year %>%
   group_by(name) %>%
   summarise(beta = mean(beta))
 
 beta <- list(
-  fixed = df_beta_fixed,
-  site = df_beta_site,
-  huc = df_beta_huc,
-  year = df_beta_year
+  fixed = beta_fixed,
+  site = beta_site,
+  huc = beta_huc,
+  year = beta_year
 )
 
 B.site.mean <- colMeans(m_out$results$mean$B.site)
@@ -84,21 +87,22 @@ B.year.mean <- colMeans(m_out$results$mean$B.year)
 
 # covariates --------------------------------------------------------------
 
-df_covariates <- readRDS(file.path(model_wd, "data-covariates.rds")) %>%
+covariates <- readRDS(file.path(model_wd, "data-covariates.rds")) %>%
   filter(
     AreaSqKM <= 200,
     allonnet < 70
   ) %>%
   mutate(
     impoundArea = AreaSqKM * allonnet / 100
-  )
-df_covariates <- df_covariates[complete.cases(df_covariates), ]
+  ) %>% 
+  select(-allonnet)
+covariates <- covariates[complete.cases(covariates), ]
 
 
 # daymet ------------------------------------------------------------------
 
-get_daymet <- function (featureid, delta_airTemp = 0) {
-  con <- dbConnect(RPostgreSQL::PostgreSQL(), host = "osensei.cns.umass.edu", dbname = "daymet", user = "jeff")
+get_daymet <- function (featureid) {
+  con <- dbConnect(RPostgres::Postgres(), host = "osensei.cns.umass.edu", port = 5434, dbname = "daymet", user = "jeff")
   sql <- paste0("
                        WITH t1 AS (
                        SELECT
@@ -130,7 +134,8 @@ get_daymet <- function (featureid, delta_airTemp = 0) {
   
   df %>%
     mutate(
-      airTemp = (tmin + tmax) / 2 + delta_airTemp,
+      featureid = as.numeric(featureid),
+      airTemp = (tmin + tmax) / 2,
       airTempLagged1 = lag(airTemp, n = 1, fill = NA),
       temp7p = zoo::rollapply(
         data = airTempLagged1,
@@ -146,18 +151,25 @@ get_daymet <- function (featureid, delta_airTemp = 0) {
     select(-tmin, -tmax)
 }
 
-get_daymet(featureid = 201411588)
-
+get_daymet(featureid = 201411588) %>% 
+  pull(airTemp) %>% 
+  mean(na.rm = TRUE)
+get_daymet(featureid = 201411588, 1, 0.1) %>% 
+  pull(airTemp) %>% 
+  mean(na.rm = TRUE)
+get_daymet(featureid = 201411588, 0, 0.1) %>% 
+  pull(airTemp) %>% 
+  mean(na.rm = TRUE)
 
 # merge --------------------------------------------------------------------
 
-raw_input <- function (featureid, delta_airTemp = 0) {
-  x_daymet <- get_daymet(featureid, delta_airTemp)
+raw_input <- function (featureid, delta_airTemp = 0, delta_precip = 0) {
+  x_daymet <- get_daymet(featureid, delta_airTemp, delta_precip)
   
   x_daymet %>%
     mutate(year = year(date)) %>% 
     left_join(df_huc, by = "featureid") %>% 
-    left_join(df_covariates, by = "featureid") %>%
+    left_join(covariates, by = "featureid") %>%
     left_join(m_out$ids$site, by = "featureid") %>%
     left_join(m_out$ids$huc, by = "huc8") %>%
     left_join(m_out$ids$year, by = "year") %>% 
@@ -168,14 +180,22 @@ raw_input <- function (featureid, delta_airTemp = 0) {
     )
 }
 
-raw_input(201411588)
+raw_input(201411588, 0, 0) %>% 
+  pull(prcp2) %>% 
+  mean(na.rm = TRUE)
+raw_input(201411588, 0, 0.1) %>% 
+  pull(prcp2) %>% 
+  mean(na.rm = TRUE)
+raw_input(201411588, 2, 0.1) %>% 
+  pull(prcp2) %>% 
+  mean(na.rm = TRUE)
 
-create_input <- function(featureid, delta_airTemp = 0) {
-  x_inp <- raw_input(featureid, delta_airTemp)
+create_input <- function(featureid, delta_airTemp = 0, delta_precip = 0) {
+  x_inp <- raw_input(featureid, delta_airTemp, delta_precip)
 
   x_standardized <- x_inp %>%
     gather(var, value, -featureid, -featureid_id, -huc8, -huc8_id, -year, -year_id, -date) %>%
-    left_join(m_in$std, by = "var") %>%
+    left_join(variable_std, by = "var") %>%
     mutate(value = (value - mean) / sd) %>%
     select(-mean, -sd) %>%
     spread(var, value)
@@ -200,14 +220,175 @@ create_input <- function(featureid, delta_airTemp = 0) {
     )
 }
 
+variable_std
 inp_201411588 <- create_input(201411588)
+
+create_input(201411588) %>% 
+  pull(prcp2) %>% 
+  mean(na.rm = TRUE)
+
+export_featureid <- inp_201411588 %>% 
+  select(featureid, agriculture, airTemp, AreaSqKM, devel_hi, forest, impoundArea, prcp2, prcp30, temp7p)
+
+
+featureid_id <- m_out$ids$site$featureid_id[m_out$ids$site$featureid == 201411588]
+huc8 <- df_huc$huc8[df_huc$featureid == 201411588]
+huc8_id <- m_out$ids$huc$huc8_id[m_out$ids$huc$huc8 == huc8]
+
+coef_fixed <- data.frame(
+  name = m_out$covs$fixed.ef,
+  value = m_out$results$mean$B.0
+)
+
+if (length(huc8_id) == 1) {
+  coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = m_out$results$mean$B.huc[huc8_id, ])
+} else {
+  coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = colMeans(m_out$results$mean$B.huc))
+}
+if (length(featureid_id) == 1) {
+  coef_catchment <- data.frame(name = m_out$covs$site.ef, value = m_out$results$mean$B.site[featureid_id, ])
+} else {
+  coef_catchment <- data.frame(name = m_out$covs$site.ef, value = colMeans(m_out$results$mean$B.site))
+}
+
+coef_year <- data.frame(
+  year = m_out$ids$year$year,
+  intercept_year = m_out$results$mean$B.year[, 1]
+) %>% 
+  complete(year = 1980:max(m_out$ids$year$year)) %>% 
+  mutate(intercept_year = coalesce(intercept_year, mean(m_out$results$mean$B.year[, 1])))
+coef_year <- as.list(set_names(coef_year$intercept_year, nm = coef_year$year))
+
+coef = list(
+  fixed = coef_fixed,
+  huc8 = coef_huc8,
+  catchment = coef_catchment,
+  year = coef_year
+)
+
+export_featureid = list(
+  inp = list(
+    fixed = covariates %>% 
+      filter(featureid == 201411588) %>% 
+      select(-featureid) %>% 
+      as.list(),
+    daily = get_daymet(201411588) %>% 
+      select(date, year, airTemp, prcp2, prcp30, temp7p) %>% 
+      filter(month(date) == 7) %>% 
+      left_join(
+        tibble(
+          year = m_out$ids$year$year,
+          intercept_year = m_out$results$mean$B.year[, 1]
+        ),
+        by = "year"
+      ) %>% 
+      mutate(
+        intercept_year = coalesce(intercept_year, mean(m_out$results$mean$B.year[, 1]))
+      )
+  ),
+  coef = coef,
+  std = map(split(select(variable_std, -var), variable_std$var), as.list)
+)
+
+jsonlite::write_json(export_featureid, path = "../model/201411588.json", auto_unbox = TRUE, pretty = TRUE, digits = 8)
+
+export_featureid <- function (x, daymet, path = "export") {
+  filepath <- glue::glue("export/{x}.json")
+  
+  featureid_id <- m_out$ids$site$featureid_id[m_out$ids$site$featureid == x]
+  huc8 <- df_huc$huc8[df_huc$featureid == x]
+  huc8_id <- m_out$ids$huc$huc8_id[m_out$ids$huc$huc8 == huc8]
+  
+  coef_fixed <- data.frame(
+    name = m_out$covs$fixed.ef,
+    value = m_out$results$mean$B.0
+  )
+  
+  if (length(huc8_id) == 1) {
+    coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = m_out$results$mean$B.huc[huc8_id, ])
+  } else {
+    coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = colMeans(m_out$results$mean$B.huc))
+  }
+  if (length(featureid_id) == 1) {
+    coef_catchment <- data.frame(name = m_out$covs$site.ef, value = m_out$results$mean$B.site[featureid_id, ])
+  } else {
+    coef_catchment <- data.frame(name = m_out$covs$site.ef, value = colMeans(m_out$results$mean$B.site))
+  }
+  
+  coef_year <- data.frame(
+    year = m_out$ids$year$year,
+    intercept_year = m_out$results$mean$B.year[, 1]
+  ) %>% 
+    complete(year = 1980:max(m_out$ids$year$year)) %>% 
+    mutate(intercept_year = coalesce(intercept_year, mean(m_out$results$mean$B.year[, 1])))
+  coef_year <- as.list(set_names(coef_year$intercept_year, nm = coef_year$year))
+  
+  coef = list(
+    fixed = coef_fixed,
+    huc8 = coef_huc8,
+    catchment = coef_catchment,
+    year = coef_year
+  )
+  
+  export_featureid = list(
+    inp = list(
+      fixed = covariates %>% 
+        filter(featureid == x) %>% 
+        select(-featureid) %>% 
+        as.list(),
+      daily = daymet %>% 
+        filter(featureid == x) %>% 
+        select(date, year, airTemp, prcp2, prcp30, temp7p) %>% 
+        filter(month(date) == 7) %>% 
+        left_join(
+          tibble(
+            year = m_out$ids$year$year,
+            intercept_year = m_out$results$mean$B.year[, 1]
+          ),
+          by = "year"
+        ) %>% 
+        mutate(
+          intercept_year = coalesce(intercept_year, mean(m_out$results$mean$B.year[, 1]))
+        )
+    ),
+    coef = coef,
+    std = map(split(select(variable_std, -var), variable_std$var), as.list)
+  )
+  jsonlite::write_json(export_featureid, path = filepath, auto_unbox = TRUE, pretty = FALSE, digits = 8)
+}
+
+library(sf)
+catchments <- st_read("../public/data/geojson/catchments_ma.json")
+# catchments <- head(catchments, 200)
+
+skip_featureids <- as.numeric(str_remove(list.files("export"), ".json"))
+
+featureids <- setdiff(catchments$FEATUREID, skip_featureids)
+batch_size <- 100
+batches <- split(featureids, ceiling(seq_along(featureids) / batch_size))
+pb <- progress::progress_bar$new(total = length(featureids), format = "[:bar] :percent :eta")
+for (i in 1:length(batches)) {
+  featureids <- batches[[i]]
+  daymet <- get_daymet(featureids)
+  for (x in featureids) {
+    pb$tick()
+    export_featureid(x, daymet)
+  }
+}
+
 
 
 # predict daily -----------------------------------------------------------
 
+adjust <- list(
+  forest = 67.7,
+  airTemp = 5,
+  prcp = 0
+)
 
-predict_daily <- function(featureid, delta_airTemp = 0) {
-  x <- create_input(featureid, delta_airTemp)
+predict_daily <- function(featureid, delta_airTemp = 0, delta_precip = 0) {
+  x <- create_input(featureid, delta_airTemp, delta_precip) %>% 
+    filter(month(date) == 7)
 
   # compute predictions
   X.0 <- x %>%
@@ -243,6 +424,10 @@ predict_daily <- function(featureid, delta_airTemp = 0) {
   }
   Y.year <- rowSums(X.year * B.year)
   
+  x$temp_fixed <- Y.0
+  x$temp_huc8 <- Y.huc
+  x$temp_catchment <- Y.site
+  x$temp_year <- Y.year
   x$temp <- Y.0 + Y.site + Y.year + Y.huc
   
   x
@@ -250,9 +435,23 @@ predict_daily <- function(featureid, delta_airTemp = 0) {
 
 day_201411588_0 <- predict_daily(201411588)
 day_201411588_2 <- predict_daily(201411588, 2)
+day_201411588_2_2 <- predict_daily(201411588, 2, 0.1)
+day_201411588_0_2 <- predict_daily(201411588, 0, 0.1)
 
 # mean july temp
 day_201411588_0 %>% 
+  filter(month(date) == 7) %>% 
+  pull(temp) %>%
+  mean()
+day_201411588_2 %>% 
+  filter(month(date) == 7) %>% 
+  pull(temp) %>%
+  mean()
+day_201411588_2_2 %>% 
+  filter(month(date) == 7) %>% 
+  pull(temp) %>%
+  mean()
+day_201411588_0_2 %>% 
   filter(month(date) == 7) %>% 
   pull(temp) %>%
   mean()
@@ -359,6 +558,11 @@ day_201411588_2 %>%
   pull(temp) %>% 
   mean()
 
+day_201411588_2_2 %>% 
+  filter(month(date) == 7) %>% 
+  pull(temp) %>% 
+  mean()
+
 # change in std airTemp = delta / sd_airTemp
 mean(day_201411588_2$airTemp - day_201411588_0$airTemp)
 2 / m_in$std$sd[m_in$std$var == "airTemp"]
@@ -460,6 +664,15 @@ day_201411588_0_july <- day_201411588_0 %>%
 day_201411588_2_july <- day_201411588_2 %>% 
   filter(month(date) == 7)
 
+day_201411588_2_july
+
+mean(day_201411588_2_july$temp_year)
+enframe(coef$year) %>% 
+  mutate(value = map_dbl(value, ~ .x)) %>% 
+  summarise(value = mean(value)) %>% 
+  pull(value)
+
+
 
 # delta mean algorithm ----------------------------------------------------
 
@@ -485,5 +698,433 @@ mean(day_201411588_2_july$airTemp.prcp2)
 mean(day_201411588_0_july$airTemp + 2 / cov_std$airTemp$sd) * mean(day_201411588_0_july$prcp2) + (1 - 1 / nrow(day_201411588_0_july)) * cov(day_201411588_0_july$airTemp, day_201411588_0_july$prcp2)
 mean(day_201411588_0_july$airTemp.prcp2) + (2 / cov_std$airTemp$sd) * mean(day_201411588_0_july$prcp2)
 
+# mean((X+dX)*(Y+dY)) = mean(X+dX) * mean(Y+dY) + (n-1 / n) * cov(X+dX,Y+dY)
+#                = mean(X+dX) * mean(Y+dY) + (1 - 1/n) * cov(X,Y)
+#                = mean(X) * mean(Y) + (1 - 1/n) * cov(X,Y) + dX * mean(Y)
+#                = mean(X*Y) + dX * mean(Y)
+mean(day_201411588_2_july$airTemp.prcp2)
+mean(day_201411588_0_july$airTemp + 2 / cov_std$airTemp$sd) * mean(day_201411588_0_july$prcp2) + (1 - 1 / nrow(day_201411588_0_july)) * cov(day_201411588_0_july$airTemp, day_201411588_0_july$prcp2)
+mean(day_201411588_0_july$airTemp.prcp2) + (2 / cov_std$airTemp$sd) * mean(day_201411588_0_july$prcp2)
+
+
 # NOTE: mean((X+dX)*Y) = mean(X*Y) + dX * mean(Y)
 
+day_201411588_0_july$temp %>% mean
+
+day_201411588_0_july
+
+
+
+
+mean(day_201411588_0_july$temp)
+day_201411588_2_july <- day_201411588_2 %>% 
+  filter(month(date) == 7)
+
+
+
+bind_rows(
+  `0` = day_201411588_0 %>% 
+    summarise(across(agriculture:airTemp.agriculture, mean)),
+  `2` = day_201411588_2 %>% 
+    summarise(across(agriculture:airTemp.agriculture, mean)),
+  .id = "air"
+) %>% 
+  pivot_longer(-air) %>% 
+  pivot_wider(names_from = "air") %>% 
+  mutate(delta = `2` - `0`) %>% 
+  left_join(variable_std, by = c("name" = "var")) %>% 
+  mutate(`delta*sd` = delta * sd)
+
+with(day_201411588_0, cor(airTemp, prcp2))
+
+with(day_201411588_0, mean(airTemp) * mean(prcp2) + (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2))
+with(day_201411588_0, mean(airTemp.prcp2))
+
+
+with(day_201411588_0, mean(airTemp) * mean(prcp2) + (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2)) +
+  with(day_201411588_0, mean(prcp2) * (2 / variable_std$sd[variable_std$var == "airTemp"]))
+with(day_201411588_2, mean(airTemp) * mean(prcp2) + (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2))
+with(day_201411588_2, mean(airTemp.prcp2))
+
+
+airTemp * (prcp2 + prcp2 * AreaSqKM + prcp30 + prcp30 * AreaSqKM + forest + devel_hi + AreaSqKM + impoundArea + agriculture)
+
+airTemp.prcp2
+airTemp.prcp2.da
+airTemp.prcp30
+airTemp.prcp30.da
+airTemp.forest
+airTemp.devel_hi
+airTemp.da
+airTemp.impoundArea
+airTemp.agriculture
+
+
+
+
+
+featureid_id <- m_out$ids$site$featureid_id[m_out$ids$site$featureid == 201411588]
+huc8 <- df_huc$huc8[df_huc$featureid == 201411588]
+huc8_id <- m_out$ids$huc$huc8_id[m_out$ids$huc$huc8 == huc8]
+
+coef_fixed <- data.frame(
+  name = m_out$covs$fixed.ef,
+  value = m_out$results$mean$B.0
+)
+
+if (length(huc8_id) == 1) {
+  coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = m_out$results$mean$B.huc[huc8_id, ])
+} else {
+  coef_huc8 <- data.frame(name = m_out$covs$huc.ef, value = colMeans(m_out$results$mean$B.huc))
+}
+if (length(featureid_id) == 1) {
+  coef_catchment <- data.frame(name = m_out$covs$site.ef, value = m_out$results$mean$B.site[featureid_id, ])
+} else {
+  coef_catchment <- data.frame(name = m_out$covs$site.ef, value = colMeans(m_out$results$mean$B.site))
+}
+
+coef_year <- data.frame(
+  year = m_out$ids$year$year,
+  intercept_year = m_out$results$mean$B.year[, 1]
+) %>% 
+  complete(year = 1980:max(m_out$ids$year$year)) %>% 
+  mutate(intercept_year = coalesce(intercept_year, mean(m_out$results$mean$B.year[, 1]))) %>% 
+  summarise(value = mean(intercept_year)) %>% 
+  mutate(name = "intercept")
+
+coef = list(
+  fixed = coef_fixed,
+  huc8 = coef_huc8,
+  catchment = coef_catchment,
+  year = coef_year
+)
+
+
+day_201411588_0_mean <- day_201411588_0 %>% 
+  summarise(across(agriculture:airTemp.agriculture, mean)) %>% 
+  mutate(intercept = 1) %>% 
+  pivot_longer(everything()) %>% 
+  left_join(
+    coef_fixed %>% 
+      select(name, b_fix = value),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_huc8 %>% 
+      select(name, b_huc = value) %>% 
+      mutate(name = if_else(name == "intercept.huc", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_catchment %>% 
+      select(name, b_catchment = value) %>% 
+      mutate(name = if_else(name == "intercept.site", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_year %>% 
+      select(name, b_year = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    across(starts_with("b_"), ~ coalesce(.x, 0)),
+    b = b_fix + b_huc + b_catchment + b_year
+  ) %>% 
+  mutate(
+    x = b * value
+  )
+
+day_201411588_2_mean <- day_201411588_2 %>% 
+  summarise(across(agriculture:airTemp.agriculture, mean)) %>% 
+  mutate(intercept = 1) %>% 
+  pivot_longer(everything()) %>% 
+  left_join(
+    coef_fixed %>% 
+      select(name, b_fix = value),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_huc8 %>% 
+      select(name, b_huc = value) %>% 
+      mutate(name = if_else(name == "intercept.huc", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_catchment %>% 
+      select(name, b_catchment = value) %>% 
+      mutate(name = if_else(name == "intercept.site", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_year %>% 
+      select(name, b_year = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    across(starts_with("b_"), ~ coalesce(.x, 0)),
+    b = b_fix + b_huc + b_catchment + b_year
+  ) %>% 
+  mutate(
+    x = b * value
+  )
+day_201411588_2_2_mean <- day_201411588_2_2 %>% 
+  summarise(across(agriculture:airTemp.agriculture, mean)) %>% 
+  mutate(intercept = 1) %>% 
+  pivot_longer(everything()) %>% 
+  left_join(
+    coef_fixed %>% 
+      select(name, b_fix = value),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_huc8 %>% 
+      select(name, b_huc = value) %>% 
+      mutate(name = if_else(name == "intercept.huc", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_catchment %>% 
+      select(name, b_catchment = value) %>% 
+      mutate(name = if_else(name == "intercept.site", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_year %>% 
+      select(name, b_year = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    across(starts_with("b_"), ~ coalesce(.x, 0)),
+    b = b_fix + b_huc + b_catchment + b_year
+  ) %>% 
+  mutate(
+    x = b * value
+  )
+
+sum(day_201411588_0_mean$x)
+mean(day_201411588_0$temp)
+
+sum(day_201411588_2_mean$x)
+mean(day_201411588_2$temp)
+
+sum(day_201411588_2_2_mean$x)
+mean(day_201411588_2_2$temp)
+
+day_201411588_0_mean %>% 
+  select(name, b, value_0 = value) %>% 
+  left_join(
+    day_201411588_2_mean %>% 
+      select(name, value_2 = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    delta = value_2 - value_0
+  ) %>% 
+  left_join(select(variable_std, name = var, sd), by = c("name")) %>% 
+  mutate(`delta*sd` = delta * sd) %>% 
+  print(n = Inf)
+
+# airTemp.prcp2
+with(day_201411588_0, mean(airTemp.prcp2))
+with(day_201411588_0, mean(airTemp) * mean(prcp2) + (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2))
+
+with(day_201411588_2, mean(airTemp.prcp2)) - with(day_201411588_0, mean(airTemp.prcp2))
+with(day_201411588_0, mean(prcp2) * (2 / variable_std$sd[variable_std$var == "airTemp"]))
+
+# airTemp.prcp2.da
+with(day_201411588_0, mean(airTemp.prcp2.da))
+with(day_201411588_0, (mean(airTemp) * mean(prcp2) + (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2)) * mean(AreaSqKM))
+
+with(day_201411588_2, mean(airTemp.prcp2.da)) - with(day_201411588_0, mean(airTemp.prcp2.da))
+with(day_201411588_0, mean(AreaSqKM) * mean(prcp2) * (2 / variable_std$sd[variable_std$var == "airTemp"]))
+
+
+day_201411588_0_mean %>% 
+  select(name, b, value_0 = value) %>% 
+  left_join(
+    day_201411588_2_mean %>% 
+      select(name, value_2 = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    delta = value_2 - value_0
+  ) %>% 
+  left_join(select(variable_std, name = var, sd), by = c("name")) %>% 
+  mutate(`delta*sd` = delta * sd) %>% 
+  print(n = Inf)
+
+n_days <- nrow(day_201411588_0)
+covariance <- list(
+  airTemp.prcp2 = with(day_201411588_0, (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp2)),
+  airTemp.prcp30 = with(day_201411588_0, (1 - 1 / nrow(day_201411588_0)) * cov(airTemp, prcp30))
+)
+inp_mean_201411588 <- day_201411588_0_mean %>% 
+  select(name, value) %>% 
+  head(9) %>% 
+  pivot_wider()
+
+inp_mean_201411588 %>% 
+  mutate(
+    prcp2.da = prcp2 * AreaSqKM,
+    prcp30.da = prcp30 * AreaSqKM,
+    airTemp.prcp2 = airTemp * prcp2 + covariance[["airTemp.prcp2"]],
+    airTemp.prcp2.da = (airTemp * prcp2 + covariance[["airTemp.prcp2"]]) * AreaSqKM,
+    airTemp.prcp30 = airTemp * prcp30 + covariance[["airTemp.prcp30"]],
+    airTemp.prcp30.da = (airTemp * prcp30 + covariance[["airTemp.prcp30"]]) * AreaSqKM,
+    airTemp.forest = airTemp * forest,
+    airTemp.devel_hi = airTemp * devel_hi,
+    airTemp.da = airTemp * AreaSqKM,
+    airTemp.impoundArea = airTemp * impoundArea,
+    airTemp.agriculture = airTemp * agriculture,
+    intercept = 1
+  ) %>%
+  pivot_longer(everything()) %>% 
+  left_join(
+    coef_fixed %>% 
+      select(name, b_fix = value),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_huc8 %>% 
+      select(name, b_huc = value) %>% 
+      mutate(name = if_else(name == "intercept.huc", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_catchment %>% 
+      select(name, b_catchment = value) %>% 
+      mutate(name = if_else(name == "intercept.site", "intercept", name)),
+    by = "name"
+  ) %>% 
+  left_join(
+    coef_year %>% 
+      select(name, b_year = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    across(starts_with("b_"), ~ coalesce(.x, 0)),
+    b = b_fix + b_huc + b_catchment + b_year
+  ) %>% 
+  mutate(
+    x = b * value
+  ) %>% 
+  pull(x) %>% 
+  sum()
+sum(day_201411588_0_mean$x)
+
+beta_201411588 <- coef_fixed %>% 
+  select(name, b_fix = value) %>% 
+  full_join(
+    coef_huc8 %>% 
+      select(name, b_huc = value) %>% 
+      mutate(name = if_else(name == "intercept.huc", "intercept", name)),
+    by = "name"
+  ) %>% 
+  full_join(
+    coef_catchment %>% 
+      select(name, b_catchment = value) %>% 
+      mutate(name = if_else(name == "intercept.site", "intercept", name)),
+    by = "name"
+  ) %>% 
+  full_join(
+    coef_year %>% 
+      select(name, b_year = value),
+    by = "name"
+  ) %>% 
+  mutate(
+    across(starts_with("b_"), ~ coalesce(.x, 0)),
+    b = b_fix + b_huc + b_catchment + b_year
+  )
+
+inp_mean_201411588 %>% 
+  mutate(
+    airTemp = airTemp + 2 / variable_std$sd[which(variable_std$var == "airTemp")],
+    temp7p = temp7p + 2 / variable_std$sd[which(variable_std$var == "temp7p")]
+  ) %>% 
+  mutate(
+    prcp2.da = prcp2 * AreaSqKM,
+    prcp30.da = prcp30 * AreaSqKM,
+    airTemp.prcp2 = airTemp * prcp2 + covariance[["airTemp.prcp2"]],
+    airTemp.prcp2.da = (airTemp * prcp2 + covariance[["airTemp.prcp2"]]) * AreaSqKM,
+    airTemp.prcp30 = airTemp * prcp30 + covariance[["airTemp.prcp30"]],
+    airTemp.prcp30.da = (airTemp * prcp30 + covariance[["airTemp.prcp30"]]) * AreaSqKM,
+    airTemp.forest = airTemp * forest,
+    airTemp.devel_hi = airTemp * devel_hi,
+    airTemp.da = airTemp * AreaSqKM,
+    airTemp.impoundArea = airTemp * impoundArea,
+    airTemp.agriculture = airTemp * agriculture,
+    intercept = 1
+  ) %>%
+  pivot_longer(everything()) %>% 
+  left_join(select(beta_201411588, name, b), by = "name") %>% 
+  mutate(
+    x = b * value
+  ) %>% 
+  pull(x) %>% 
+  sum()
+
+sum(day_201411588_2_mean$x)
+
+
+
+x_201411588 <- inp_mean_201411588 %>% 
+  mutate(
+    # airTemp = airTemp + 2 / variable_std$sd[which(variable_std$var == "airTemp")],
+    # temp7p = temp7p + 2 / variable_std$sd[which(variable_std$var == "temp7p")]
+    prcp2 = prcp2 + 0.1 / variable_std$sd[which(variable_std$var == "prcp2")],
+    prcp30 = prcp30 + 0.1 / variable_std$sd[which(variable_std$var == "prcp30")]
+  ) %>% 
+  mutate(
+    prcp2.da = prcp2 * AreaSqKM,
+    prcp30.da = prcp30 * AreaSqKM,
+    airTemp.prcp2 = airTemp * prcp2 + covariance[["airTemp.prcp2"]],
+    airTemp.prcp2.da = (airTemp * prcp2 + covariance[["airTemp.prcp2"]]) * AreaSqKM,
+    airTemp.prcp30 = airTemp * prcp30 + covariance[["airTemp.prcp30"]],
+    airTemp.prcp30.da = (airTemp * prcp30 + covariance[["airTemp.prcp30"]]) * AreaSqKM,
+    airTemp.forest = airTemp * forest,
+    airTemp.devel_hi = airTemp * devel_hi,
+    airTemp.da = airTemp * AreaSqKM,
+    airTemp.impoundArea = airTemp * impoundArea,
+    airTemp.agriculture = airTemp * agriculture,
+    intercept = 1
+  ) %>%
+  pivot_longer(everything()) %>% 
+  left_join(select(beta_201411588, name, b), by = "name") %>% 
+  mutate(
+    x = b * value
+  )
+sum(x_201411588$x)
+
+sum(day_201411588_0_mean$x)
+mean(day_201411588_0$temp)
+
+sum(day_201411588_2_2_mean$x)
+mean(day_201411588_2_2$temp)
+
+
+
+
+# final -------------------------------------------------------------------
+
+x_inp_raw <- raw_input(201411588) %>%
+  filter(month(date) %in% 7)
+x_inp <- x_inp_raw %>% 
+  gather(var, value, -featureid, -featureid_id, -huc8, -huc8_id, -year, -year_id, -date) %>%
+  left_join(variable_std, by = "var") %>%
+  mutate(value = (value - mean) / sd) %>%
+  select(-mean, -sd) %>%
+  spread(var, value) %>%
+  mutate(
+    prcp2.da = prcp2 * AreaSqKM,
+    prcp30.da = prcp30 * AreaSqKM,
+    airTemp.prcp2 = airTemp * prcp2,
+    airTemp.prcp2.da = airTemp * prcp2 * AreaSqKM,
+    airTemp.prcp30 = airTemp * prcp30,
+    airTemp.prcp30.da = airTemp * prcp30 * AreaSqKM,
+    airTemp.forest = airTemp * forest,
+    airTemp.devel_hi = airTemp * devel_hi,
+    airTemp.da = airTemp * AreaSqKM,
+    airTemp.impoundArea = airTemp * impoundArea,
+    airTemp.agriculture = airTemp * agriculture,
+    intercept = 1
+  )

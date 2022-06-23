@@ -1,4 +1,5 @@
 /* global $, L, d3, topojson, crossfilter, Plotly */
+/* eslint-disable dot-notation */
 
 let topoSVG
 let topos
@@ -6,6 +7,18 @@ let transform
 let path
 let tooltip
 let map
+let selectedProps
+
+const variableLabels = {
+  airTemp: 'Change in Air Temp (C)',
+  prcp: 'Change in Precip (%)',
+  forest: 'Forest Cover (%)',
+  agriculture: 'Agriculture Cover (%)',
+  devel_hi: 'High Development Cover (%)'
+}
+
+const N_STEPS = 100
+const tempModelMap = new Map()
 
 function setupMap () {
   map = new L.Map('map', {
@@ -627,14 +640,15 @@ function initPage () { // eslint-disable-line
 
   topos.catchments_ma = {
     g: d3.select('#catchments_maG')._groups[0][0],
-    id: 'FEATUREID',
+    id: 'featureid',
     gids: [],
     feats: []
   }
 
   Promise.all([
     d3.json('data/geojson/catchments_ma.json'),
-    d3.tsv('data/model/1.2.2/df_app_data.tsv'),
+    // d3.tsv('data/model/1.2.2/df_app_data.tsv'),
+    d3.csv('data/attributes.csv'),
     d3.csv('data/model/1.2.2/df_z_group.csv'),
     d3.csv('data/model/1.2.2/ranef_glmm.csv'),
     d3.csv('data/model/1.2.2/summary_glmm.csv'),
@@ -692,7 +706,7 @@ function initPage () { // eslint-disable-line
           tmpObj[key] = parseFloat(row[key])
         }
       })
-      topos.model.app_data[row.FEATUREID.toString()] = tmpObj
+      topos.model.app_data[row.featureid.toString()] = tmpObj
     })
 
     data[2].forEach(function (row) {
@@ -713,34 +727,43 @@ function initPage () { // eslint-disable-line
 
     addTopo(topos.catchments_ma)
 
+    const variableOptions = ['airTemp', 'prcp', 'agriculture', 'forest', 'devel_hi']
+
     d3.select('#plotY')
       .on('change', function () {
-        if (d3.select('#plotDiv').attr('data-props') != null) {
-          makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        // if (d3.select('#plotDiv').attr('data-props') != null) {
+        //   makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        // }
+        if (selectedProps) {
+          makePlot(selectedProps)
         }
       })
       .selectAll('option')
-      .data(data[1].columns.slice(2, 8))
+      .data(variableOptions)
       .enter()
       .append('option')
       .text(function (d) { return d })
 
     d3.select('#plotX')
       .on('change', function () {
-        if (d3.select('#plotDiv').attr('data-props') != null) {
-          makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        console.log('plotX:change', selectedProps)
+        // if (d3.select('#plotDiv').attr('data-props') != null) {
+        //   makePlot(JSON.parse(d3.select('#plotDiv').attr('data-props')))
+        // }
+        if (selectedProps) {
+          makePlot(selectedProps)
         }
       })
       .selectAll('option')
-      .data(data[1].columns.slice(2, 8))
+      .data(variableOptions)
       .enter()
       .append('option')
       .text(function (d) { return d })
 
     d3.select('#plotX')
-      .property('selectedIndex', 1)
-    d3.select('#plotY')
       .property('selectedIndex', 3)
+    d3.select('#plotY')
+      .property('selectedIndex', 0)
 
     d3.select('#catchmentSelect')
       .property('selectedIndex', 8)
@@ -918,7 +941,7 @@ function initPage () { // eslint-disable-line
     .attr('class', 'legend gradDown')
     .attr('id', 'plotDiv')
 
-  $('#plotDiv').draggable({ containment: 'html', cancel: '.toggle-group,input,textarea,button,select,option,#surfaceDiv,.plotSlider' })
+  $('#plotDiv').draggable({ containment: 'html', cancel: '.toggle-group,input,textarea,button,select,option,#plotOccupancy,#plotTemperature,.plotSlider' })
 
   d3.select('#plotDiv')
     .append('h4')
@@ -939,7 +962,10 @@ function initPage () { // eslint-disable-line
   d3.select('#plotDiv')
     .append('div')
     .attr('id', 'plotControlDiv')
-    .html('<div class="plotSelectDiv">' +
+    .style('width', '800px')
+    .html(
+      '<div id="catchInfoContainer">Selected Catchment: <span id="catchInfoFeatureid"></span> <span id="catchInfo" class="fa fa-info-circle"></span></div>' +
+      '<div class="plotSelectDiv">' +
       '<h5 class="plotSelectTitle">Y-Axis Variable</h5>' +
       '<select id="plotY" class="cl_select"></select>' +
       '</div>' +
@@ -947,18 +973,27 @@ function initPage () { // eslint-disable-line
       '<h5 class="plotSelectTitle">X-Axis Variable</h5>' +
       '<select id="plotX" class="cl_select"></select>' +
       '</div>' +
-      '<div id="surfaceDiv"></div>' +
+
       '<div class="plotSliderDiv">' +
-      '<h5 id="plotSliderTitleY" class="plotSelectTitle">Y-Axis Variable</h5>' +
       '<div id="plotSliderY" class="plotSlider"></div>' +
       '<span id="plotRefreshY" class="fa fa-refresh sliderSpan" title="Reset to initial value"></span>' +
+      '<h5 id="plotSliderTitleY" class="plotSelectTitle"><span id="plotSliderTitleLabelY">Y-Axis Variable</span>: <span id="plotSliderTitleValueY">N/A</span></h5>' +
       '</div>' +
       '<div class="plotSliderDiv">' +
-      '<h5 id="plotSliderTitleX" class="plotSelectTitle">X-Axis Variable</h5>' +
       '<div id="plotSliderX" class="plotSlider"></div>' +
       '<span id="plotRefreshX" class="fa fa-refresh sliderSpan" title="Reset to initial value"></span>' +
+      '<h5 id="plotSliderTitleX" class="plotSelectTitle"><span id="plotSliderTitleLabelX">X-Axis Variable</span>: <span id="plotSliderTitleValueX"></span></h5>' +
       '</div>' +
-      '<div id="predOccDiv"><h5>Predicted Occupancy: <span id="predOcc">0.00</span></h5></div>'
+      '<div style="margin-top:10px">' +
+      '<div class="chartContainer" style="width:50%">' +
+      '<div id="plotTemperature"></div>' +
+      '<div id="predTempDiv"><h5>Predicted Mean July Temp: <span id="predTemp">0.00</span> C</h5></div>' +
+      '</div>' +
+      '<div class="chartContainer" style="width:50%">' +
+      '<div id="plotOccupancy"></div>' +
+      '<div id="predOccDiv"><h5>Predicted Occupancy: <span id="predOcc">0.00</span></h5></div>' +
+      '</div>' +
+      '</div>'
     )
 
   //* *****Make div for legend
@@ -1006,7 +1041,7 @@ function initPage () { // eslint-disable-line
 
   // style the helper and placeholder when dragging/sorting
   function helperPlaceholder (tmpEvent, tmpUI) {
-    console.log(tmpUI)
+    // console.log(tmpUI)
     d3.select('.ui-sortable-placeholder.sortable-placeholder').style('width', d3.select('#' + tmpUI.item[0].id).style('width')).style('height', '37px') // .style("background", "rgba(255,255,255,0.25)");
   }
 
@@ -1196,7 +1231,7 @@ function setZ (el) {
 }
 
 function toggleWindow (name) {
-  console.log(`toggleWindow(${name})`)
+  // console.log(`toggleWindow(${name})`)
 
   const labels = {
     legend: 'Legend',
@@ -1237,7 +1272,7 @@ function toggleWindow (name) {
 }
 
 function setMappedAttribute (attribute, colorScale) {
-  console.log('setMappedAttribute()', attribute, colorScale)
+  // console.log('setMappedAttribute()', attribute, colorScale)
   d3.selectAll('.activeTopo')
     .style('fill', d => {
       return attribute === 'None' ? 'none' : colorScale(d.properties[attribute] / topos.xf.ranges[attribute].max)
@@ -1266,10 +1301,10 @@ function addTopo (topo) {
     $('[data-toggle="tooltip"]').tooltip()
   })
 
-  const tmpFeats = d3.select(topo.g).selectAll('.' + topo.class)
+  const features = d3.select(topo.g).selectAll('.' + topo.class)
     .data(topo.topo.features, function (d) { return d.id })
 
-  tmpFeats.enter()
+  features.enter()
     .append('path')
     .attr('d', path)
     .attr('class', function (d) {
@@ -1287,21 +1322,36 @@ function addTopo (topo) {
     .attr('data-html', 'true')
     .attr('title', function (d) { return d.properties[topo.id] })
     .style('stroke-width', 1 + ((map.getZoom() - 9) / 100))
-    .on('mouseenter', function () { d3.select(this).classed('svgHover', true); if (topo.class !== 'geoIndicators') { if (d3.select(this).style('visibility') === 'visible') { showIt(d3.select(this).property('data-tt')); resizeTooltip() } } })
-    .on('mousemove', function () { if (topo.class !== 'geoIndicators') { tooltip.style('top', (d3.event.pageY - 50) + 'px').style('left', (d3.event.pageX) + 'px'); resizeTooltip() } })
-    .on('mouseleave', function () { d3.select(this).classed('svgHover', false); tooltip.style('visibility', 'hidden') })
+    .on('mouseenter', function () {
+      d3.select(this).classed('svgHover', true)
+      if (topo.class !== 'geoIndicators') {
+        if (d3.select(this).style('visibility') === 'visible') {
+          showIt(d3.select(this).property('data-tt')); resizeTooltip()
+        }
+      }
+    })
+    .on('mousemove', function () {
+      if (topo.class !== 'geoIndicators') {
+        tooltip.style('top', (d3.event.pageY - 50) + 'px').style('left', (d3.event.pageX) + 'px'); resizeTooltip()
+      }
+    })
+    .on('mouseleave', function () {
+      d3.select(this).classed('svgHover', false); tooltip.style('visibility', 'hidden')
+    })
     .call(d3.drag()) //* **Prevents default for click event when the map is being dragged
     .on('click', function (d) {
       if (d3.select(this).style('visibility') === 'visible') {
-        // const tmpPath = this
+        // console.log('click:feature', d.properties)
+
         d3.selectAll('.svgSelected').classed('svgSelected', false)
         d3.select(this).classed('svgSelected', true)
 
-        d3.select('#plotDiv')
-          .attr('data-props', JSON.stringify(d.properties))
+        // d3.select('#plotDiv')
+        //   .attr('data-props', JSON.stringify(d.properties))
+        selectedProps = d.properties
 
-        makePlot(d.properties)
-        if (d3.select('#plotDiv').style('opacity') === 0) {
+        fetchAndMakePlot(d.properties)
+        if (d3.select('#plotDiv').style('opacity') === '0') {
           toggleWindow('plot')
         }
       }
@@ -1309,7 +1359,26 @@ function addTopo (topo) {
     .on('touchstart', function () { d3.select(this).classed('svgHover', true) })
     .on('touchend', function () { d3.select(this).classed('svgHover', false); if (d3.select(this).classed('geoIndicators') === false) { if (d3.select(this).classed('svgSelected') === true) { d3.select(this).classed('svgSelected', false) } else { d3.select(this).classed('svgSelected', true) } } })
 
-  tmpFeats.exit().remove()
+  features.exit().remove()
+}
+
+function fetchAndMakePlot (props) {
+  console.log('fetchAndMakePlot', props)
+  const featureid = props.FEATUREID
+
+  if (!tempModelMap.has(featureid)) {
+    $.ajax(`data/temp-model/${featureid}.json`)
+      .then(d => {
+        props.tempModel = d
+        tempModelMap.set(featureid, d)
+        makePlot(props)
+        // const temp = computeMeanJulyTemperature(props.tempModel)
+        // console.log(featureid, temp, props.mean_jul_temp)
+      })
+  } else {
+    makePlot(props)
+    // console.log(featureid, computeMeanJulyTemperature(props.tempModel, { airTemp: 2 }))
+  }
 }
 
 function makePlot (props) {
@@ -1321,74 +1390,147 @@ function makePlot (props) {
   Y.var = d3.select('#plotY').property('value')
   X.var = d3.select('#plotX').property('value')
 
-  console.log('vars:', X.var, Y.var)
-
-  Y.min = topos.xf.ranges[Y.var].min
-  Y.max = topos.xf.ranges[Y.var].max
+  if (Y.var === 'airTemp') {
+    Y.min = -5
+    Y.max = 5
+  } else if (Y.var === 'prcp') {
+    Y.min = -20
+    Y.max = 20
+  } else {
+    Y.min = 0
+    Y.max = 100
+  }
   Y.range = Y.max - Y.min
-  Y.step = Y.range / 100
+  Y.step = Y.range / N_STEPS
 
-  X.min = topos.xf.ranges[X.var].min
-  X.max = topos.xf.ranges[X.var].max
+  if (X.var === 'airTemp') {
+    X.min = -5
+    X.max = 5
+  } else if (X.var === 'prcp') {
+    X.min = -20
+    X.max = 20
+  } else {
+    X.min = 0
+    X.max = 100
+  }
   X.range = X.max - X.min
-  X.step = X.range / 100
+  X.step = X.range / N_STEPS
 
-  d3.select('#plotSliderTitleY').text(Y.var)
-  d3.select('#plotSliderTitleX').text(X.var)
+  d3.select('#plotSliderTitleLabelY').text(variableLabels[Y.var])
+  d3.select('#plotSliderTitleLabelX').text(variableLabels[X.var])
 
-  d3.select('#plotSliderY').property('title', props[Y.var])
-  d3.select('#plotSliderX').property('title', props[X.var])
+  d3.select('#plotSliderY').property('title', Y.var !== 'airTemp' && Y.var !== 'prcp' ? props[Y.var] : 0)
+  d3.select('#plotSliderX').property('title', X.var !== 'airTemp' && X.var !== 'prcp' ? props[X.var] : 0)
 
-  d3.select('#plotRefreshY').on('click', function () { $('#plotSliderY').slider('value', props[Y.var]); updateY(props, props[Y.var]) })
-  d3.select('#plotRefreshX').on('click', function () { $('#plotSliderX').slider('value', props[X.var]); updateX(props, props[X.var]) })
+  d3.select('#plotRefreshY')
+    .on('click', () => {
+      let value = 0
+      if (Y.var !== 'airTemp' && Y.var !== 'prcp') {
+        value = props[Y.var]
+      }
+      $('#plotSliderY').slider('value', value)
 
-  $('#plotSliderY').slider({ animate: 'fast', min: Y.min, max: Y.max, value: props[Y.var], slide: function (event, ui) { updateY(props, ui.value) } })
-  $('#plotSliderX').slider({ animate: 'fast', min: X.min, max: X.max, value: props[X.var], slide: function (event, ui) { updateX(props, ui.value) } })
+      updateY(props, value)
+    })
+  d3.select('#plotRefreshX')
+    .on('click', () => {
+      let value = 0
+      if (X.var !== 'airTemp' && X.var !== 'prcp') {
+        value = props[X.var]
+      }
+      $('#plotSliderX').slider('value', value)
+
+      updateX(props, value)
+    })
+
+  $('#plotSliderY').slider({
+    animate: 'fast',
+    min: Y.min,
+    max: Y.max,
+    value: Y.var === 'airTemp' || Y.var === 'prcp' ? 0 : props[Y.var],
+    slide: (event, ui) => updateY(props, ui.value)
+  })
+  $('#plotSliderX').slider({
+    animate: 'fast',
+    min: X.min,
+    max: X.max,
+    value: X.var === 'airTemp' || X.var === 'prcp' ? 0 : props[X.var],
+    slide: (event, ui) => updateX(props, ui.value)
+  })
+
+  d3.select('#plotSliderTitleValueY').text($('#plotSliderY').slider('value'))
+  d3.select('#plotSliderTitleValueX').text($('#plotSliderX').slider('value'))
 
   function updateY (props, tmpVal) {
-    const propsCopy = JSON.parse(JSON.stringify(props))
-    propsCopy[Y.var] = tmpVal
-    propsCopy[X.var] = $('#plotSliderX').slider('value')
-    const tmpOcc = calcOcc(propsCopy)
-    data[1].y[0] = tmpVal
-    data[1].z[0] = tmpOcc
-    Plotly.redraw('surfaceDiv')
+    // const propsCopy = JSON.parse(JSON.stringify(props))
+    // propsCopy[Y.var] = tmpVal
+    // propsCopy[X.var] = $('#plotSliderX').slider('value')
+    d3.select('#plotSliderTitleValueY').text(tmpVal)
+    const adjust = {}
+    adjust[X.var] = $('#plotSliderX').slider('value')
+    adjust[Y.var] = tmpVal
+    const meanJulyTemp = computeMeanJulyTemperature(props.tempModel, adjust)
+    const tmpOcc = calcOcc(meanJulyTemp, props.huc8)
+    occupancyData[1].y[0] = tmpVal
+    occupancyData[1].z[0] = tmpOcc
+    temperatureData[1].y[0] = tmpVal
+    temperatureData[1].z[0] = meanJulyTemp
+    Plotly.redraw('plotOccupancy')
+    Plotly.redraw('plotTemperature')
     d3.select('#plotSliderY').property('title', tmpVal)
     if (!isNaN(props.occ_current)) {
+      d3.select('#predTemp').text(meanJulyTemp.toFixed(1))
       d3.select('#predOcc').text(tmpOcc.toFixed(3))
     }
   }
 
   function updateX (props, tmpVal) {
-    const propsCopy = JSON.parse(JSON.stringify(props))
-    propsCopy[X.var] = tmpVal
-    propsCopy[Y.var] = $('#plotSliderY').slider('value')
-    const tmpOcc = calcOcc(propsCopy)
-    data[1].x[0] = tmpVal
-    data[1].z[0] = tmpOcc
-    Plotly.redraw('surfaceDiv')
+    // const propsCopy = JSON.parse(JSON.stringify(props))
+    // propsCopy[X.var] = tmpVal
+    // propsCopy[Y.var] = $('#plotSliderY').slider('value')
+    d3.select('#plotSliderTitleValueX').text(tmpVal)
+    const adjust = {}
+    adjust[Y.var] = $('#plotSliderY').slider('value')
+    adjust[X.var] = tmpVal
+    const meanJulyTemp = computeMeanJulyTemperature(props.tempModel, adjust)
+    const tmpOcc = calcOcc(meanJulyTemp, props.huc8)
+    occupancyData[1].x[0] = tmpVal
+    occupancyData[1].z[0] = tmpOcc
+    temperatureData[1].x[0] = tmpVal
+    temperatureData[1].z[0] = meanJulyTemp
+    Plotly.redraw('plotOccupancy')
+    Plotly.redraw('plotTemperature')
     d3.select('#plotSliderX').property('title', tmpVal)
     if (!isNaN(props.occ_current)) {
+      d3.select('#predTemp').text(meanJulyTemp.toFixed(1))
       d3.select('#predOcc').text(tmpOcc.toFixed(3))
     }
   }
 
+  d3.select('#predTemp').text(props.mean_jul_temp.toFixed(1))
   d3.select('#predOcc').text(props.occ_current.toFixed(3))
 
   const propsCopy = JSON.parse(JSON.stringify(props))
 
-  const cs = [['0.0', 'rgb(68, 2, 86)'], ['0.25', 'rgb(59, 82, 139)'], ['0.5', 'rgb(33, 145, 140)'], ['0.75', 'rgb(42, 176, 127)'], ['1.0', 'rgb(253, 231, 37)']]
+  const colorScale = [
+    ['0.0', 'rgb(68, 2, 86)'],
+    ['0.25', 'rgb(59, 82, 139)'],
+    ['0.5', 'rgb(33, 145, 140)'],
+    ['0.75', 'rgb(42, 176, 127)'],
+    ['1.0', 'rgb(253, 231, 37)']
+  ]
 
-  const data = [
+  const occupancyData = [
     {
       x: [],
       y: [],
       z: [],
       type: 'contour',
-      colorscale: cs
+      colorscale: colorScale,
+      name: ''
     }, {
-      x: [props[X.var]],
-      y: [props[Y.var]],
+      x: [$('#plotSliderX').slider('value')],
+      y: [$('#plotSliderY').slider('value')],
       z: [props.occ_current],
       mode: 'markers',
       type: 'scatter',
@@ -1399,48 +1541,101 @@ function makePlot (props) {
           width: 1,
           color: 'black'
         }
-      }
+      },
+      name: ''
+    }
+  ]
+  const temperatureData = [
+    {
+      x: [],
+      y: [],
+      z: [],
+      type: 'contour',
+      colorscale: colorScale,
+      name: ''
+    }, {
+      x: [$('#plotSliderX').slider('value')],
+      y: [$('#plotSliderY').slider('value')],
+      z: [props.occ_current],
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 8,
+        color: 'rgb(255, 77, 255)',
+        line: {
+          width: 1,
+          color: 'black'
+        }
+      },
+      name: ''
     }
   ]
   let a = -1
 
   for (let j = Y.min; j <= Y.max + (Y.max * 0.001); j += Y.step) {
-    data[0].y.push(j)
+    occupancyData[0].y.push(j)
+    temperatureData[0].y.push(j)
     propsCopy[Y.var] = j
-    data[0].z.push([])
+    occupancyData[0].z.push([])
+    temperatureData[0].z.push([])
     a += 1
     for (let i = X.min; i <= X.max + (X.max * 0.001); i += X.step) {
-      if (j === Y.min) { data[0].x.push(i) }
+      // console.log(computeMeanJulyTemperature(propsCopy.tempModel, [{ name: Y.var, value: j }, { name: X.var, value: i }]))
+      if (j === Y.min) {
+        occupancyData[0].x.push(i)
+        temperatureData[0].x.push(i)
+      }
       propsCopy[X.var] = i
-      const tmpOcc = calcOcc(propsCopy)
-      if (!isNaN(props.mean_jul_temp)) {
-        data[0].z[a].push(tmpOcc)
+      // const tmpOcc = calcOcc(propsCopy)
+      const adjust = {}
+      adjust[X.var] = i
+      adjust[Y.var] = j
+      const meanJulyTemp = computeMeanJulyTemperature(props.tempModel, adjust)
+      const tmpOcc = calcOcc(meanJulyTemp, props.huc8)
+      if (!isNaN(tmpOcc) && X.var !== Y.var) {
+        occupancyData[0].z[a].push(tmpOcc)
+        temperatureData[0].z[a].push(meanJulyTemp)
       }
     }
   }
 
-  const layout = {
-    title: 'Brook trout occupancy for<br>catchment <span id="selCatchID">' + props.FEATUREID + '</span>',
+  const occupancyLayout = {
+    title: 'Brook Trout Occupancy',
     width: 400,
     height: 400,
     xaxis: {
-      title: X.var
+      title: variableLabels[X.var]
     },
     yaxis: {
-      title: Y.var
+      title: variableLabels[Y.var]
+    },
+    hovermode: 'closest'
+  }
+  const temperatureLayout = {
+    title: 'Mean July Temperature',
+    width: 400,
+    height: 400,
+    xaxis: {
+      title: variableLabels[X.var]
+    },
+    yaxis: {
+      title: variableLabels[Y.var]
     },
     hovermode: 'closest'
   }
 
-  Plotly.newPlot('surfaceDiv', data, layout)
+  d3.select('#catchInfoFeatureid').text(props.FEATUREID)
+
+  Plotly.newPlot('plotOccupancy', occupancyData, occupancyLayout)
+  Plotly.newPlot('plotTemperature', temperatureData, temperatureLayout)
 
   //* **Add catchment properties as hover
-  if (document.getElementById('catchInfo') == null) {
-    d3.select('#surfaceDiv').select('.svg-container')
-      .append('span')
-      .attr('id', 'catchInfo')
-      .attr('class', 'fa fa-info-circle')
-  }
+  // if (document.getElementById('catchInfo') == null) {
+  //   d3.select('#plotOccupancy').select('.svg-container')
+  //     .append('span')
+  //     .attr('id', 'catchInfo')
+  //     .attr('class', 'fa fa-info-circle')
+  // }
   d3.select('#catchInfo')
     .on('click', function () { console.log(props) })
     .on('mouseenter', function () { d3.select('#catchInfoVals').style('visibility', 'visible').style('top', (d3.event.pageY + 10) + 'px').style('left', (d3.event.pageX - 195) + 'px') })
@@ -1450,40 +1645,76 @@ function makePlot (props) {
     .text(function () {
       let tmpText = ''
       for (const key in props) {
-        tmpText += key + ':   ' + props[key] + '\n'
+        if (key !== 'tempModel') {
+          tmpText += key + ':   ' + props[key] + '\n'
+        }
       }
       return tmpText
     })
 }
 
-function calcOcc (x) {
+function computeMeanJulyTemperature (model, userAdjust) {
+  if (model.val.AreaSqKM > 200) return null
+  // console.log(model)
+  const defaultAdjust = {
+    airTemp: 0,
+    prcp: 1,
+    forest: model.val.forest,
+    agriculture: model.val.agriculture,
+    devel_hi: model.val.devel_hi
+  }
+
+  const adjust = {
+    ...defaultAdjust,
+    ...userAdjust
+  }
+  adjust.prcp = 1 + adjust.prcp / 100
+
+  // adjust and standardize
+  const inp = {
+    airTemp: ((model.val.airTemp + adjust.airTemp) - model.std.airTemp.mean) / model.std.airTemp.sd,
+    temp7p: ((model.val.temp7p + adjust.airTemp) - model.std.temp7p.mean) / model.std.temp7p.sd,
+    prcp2: ((model.val.prcp2 * adjust.prcp) - model.std.prcp2.mean) / model.std.prcp2.sd,
+    prcp30: ((model.val.prcp30 * adjust.prcp) - model.std.prcp30.mean) / model.std.prcp30.sd,
+    forest: (adjust.forest - model.std.forest.mean) / model.std.forest.sd,
+    agriculture: (adjust.agriculture - model.std.agriculture.mean) / model.std.agriculture.sd,
+    devel_hi: (adjust.devel_hi - model.std.devel_hi.mean) / model.std.devel_hi.sd,
+    impoundArea: (model.val.impoundArea - model.std.impoundArea.mean) / model.std.impoundArea.sd,
+    AreaSqKM: (model.val.AreaSqKM - model.std.AreaSqKM.mean) / model.std.AreaSqKM.sd
+  }
+
+  inp['prcp2.da'] = inp.prcp2 * inp.AreaSqKM
+  inp['prcp30.da'] = inp.prcp30 * inp.AreaSqKM
+  inp['airTemp.prcp2'] = inp.airTemp * inp.prcp2 + model.cov['airTemp.prcp2'] * adjust.prcp
+  inp['airTemp.prcp2.da'] = (inp.airTemp * inp.prcp2 + model.cov['airTemp.prcp2'] * adjust.prcp) * inp.AreaSqKM
+  inp['airTemp.prcp30'] = inp.airTemp * inp.prcp30 + model.cov['airTemp.prcp30'] * adjust.prcp
+  inp['airTemp.prcp30.da'] = (inp.airTemp * inp.prcp30 + model.cov['airTemp.prcp30'] * adjust.prcp) * inp.AreaSqKM
+  inp['airTemp.forest'] = inp.airTemp * inp.forest
+  inp['airTemp.devel_hi'] = inp.airTemp * inp.devel_hi
+  inp['airTemp.da'] = inp.airTemp * inp.AreaSqKM
+  inp['airTemp.impoundArea'] = inp.airTemp * inp.impoundArea
+  inp['airTemp.agriculture'] = inp.airTemp * inp.agriculture
+  inp['intercept'] = 1
+
+  const values = Object.keys(inp).map(x => {
+    return inp[x] * model.coef[x]
+  })
+
+  const temp = values.reduce((p, v) => p + v, 0)
+
+  return temp
+}
+
+function calcOcc (meanJulyTemp, huc8) {
+  if (meanJulyTemp === null) return null
   const params = topos.model.params
   const std = params.std
   const fixed = params.fixed
 
-  // const sumFixed = (topos.model.summary_glmm.Intercept.Estimate) +
-  //   (topos.model.summary_glmm.AreaSqKM.Estimate * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
-  //   (topos.model.summary_glmm.summer_prcp_mm.Estimate * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-  //   (topos.model.summary_glmm.mean_jul_temp.Estimate * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd)) +
-  //   (topos.model.summary_glmm.forest.Estimate * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
-  //   (topos.model.summary_glmm.allonnet.Estimate * ((x.allonnet - topos.model.z_group.allonnet.mean) / topos.model.z_group.allonnet.sd)) +
-  //   (topos.model.summary_glmm.devel_hi.Estimate * ((x.devel_hi - topos.model.z_group.devel_hi.mean) / topos.model.z_group.devel_hi.sd)) +
-  //   (topos.model.summary_glmm.agriculture.Estimate * ((x.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
-  //   (topos.model.summary_glmm['AreaSqKM:summer_prcp_mm'].Estimate * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd) * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-  //   (topos.model.summary_glmm['mean_jul_temp:forest'].Estimate * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd) * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd)) +
-  //   (topos.model.summary_glmm['summer_prcp_mm:forest'].Estimate * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd) * ((x.forest - topos.model.z_group.forest.mean) / topos.model.z_group.forest.sd))
-
-  // if (typeof topos.model.ranef_glmm[x.huc10.toString()] !== 'undefined') {
-  //   sumRandom = (topos.model.ranef_glmm[x.huc10.toString()].Intercept) +
-  //     (topos.model.ranef_glmm[x.huc10.toString()].AreaSqKM * ((x.AreaSqKM - topos.model.z_group.AreaSqKM.mean) / topos.model.z_group.AreaSqKM.sd)) +
-  //     (topos.model.ranef_glmm[x.huc10.toString()].agriculture * ((x.agriculture - topos.model.z_group.agriculture.mean) / topos.model.z_group.agriculture.sd)) +
-  //     (topos.model.ranef_glmm[x.huc10.toString()].summer_prcp_mm * ((x.summer_prcp_mm - topos.model.z_group.summer_prcp_mm.mean) / topos.model.z_group.summer_prcp_mm.sd)) +
-  //     (topos.model.ranef_glmm[x.huc10.toString()].mean_jul_temp * ((x.mean_jul_temp - topos.model.z_group.mean_jul_temp.mean) / topos.model.z_group.mean_jul_temp.sd))
-  // }
-  const sumFixed = fixed.intercept + fixed.mean_jul_temp * (x.mean_jul_temp - std.mean_jul_temp.mean) / std.mean_jul_temp.sd
+  const sumFixed = fixed.intercept + fixed.mean_jul_temp * (meanJulyTemp - std.mean_jul_temp.mean) / std.mean_jul_temp.sd
 
   let sumRandom = 0
-  const huc8 = x.huc10.substr(0, 8)
+  // const huc8 = x.huc8
   if (topos.model.params.randomMap.has(huc8)) {
     sumRandom = topos.model.params.randomMap.get(huc8).intercept
   }
