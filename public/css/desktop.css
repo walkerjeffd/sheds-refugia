@@ -551,6 +551,7 @@ html, body {
 #catchmentDiv {
   padding: 5px;
   padding-bottom: 0;
+  width: 320px;
 }
 
 #catchDisplayH5 {
@@ -796,7 +797,7 @@ html, body {
 
 #legendDiv {
   position: absolute;
-  top: 40px;
+  top: 300px;
   left: calc(100% - 233px);
   width: auto;
   min-width: 225px;

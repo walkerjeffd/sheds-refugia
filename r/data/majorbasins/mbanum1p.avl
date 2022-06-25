@@ -1,0 +1,43 @@
+/2.1
+(Legend.1
+	Symbol:	2
+	Class:	7
+	SymType:	0x02
+)
+
+(BShSym.2
+	Color:	3
+	Outline:	1
+	OutlineColor:	4
+	OutlineWidth:	2.00000000000000
+	BgColor:	5
+	Style:	0x01
+	Stipple:	6
+)
+
+(TClr.3
+	Red:	0x77d5
+	Green:	0x81
+	Blue:	0x8200
+)
+
+(TClr.4
+	Red:	0xcacc
+	Green:	0xdb
+	Blue:	0xdc00
+)
+
+(TClr.5
+	Name:	"Transparent"
+)
+
+(Stipple.6
+	Columns:	8
+	Rows:	8
+	Bits:	00000000 00000000 
+)
+
+(LClass.7
+	IsText:	1
+)
+

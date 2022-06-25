@@ -1,0 +1,79 @@
+{
+  "featureid": 201411588,
+  "val": {
+    "airTemp": 18.2665,
+    "temp7p": 18.0909,
+    "prcp2": 7.8643,
+    "prcp30": 116.7826,
+    "agriculture": 36.8778,
+    "AreaSqKM": 67.9653,
+    "devel_hi": 0,
+    "forest": 67.7318,
+    "impoundArea": 10.4922
+  },
+  "cov": {
+    "airTemp.prcp2": -0.0099,
+    "airTemp.prcp30": -0.0207
+  },
+  "coef": {
+    "agriculture": -0.2318,
+    "airTemp": 2.0997,
+    "airTemp.agriculture": -0.0189,
+    "airTemp.da": 0.0554,
+    "airTemp.devel_hi": -0.0041,
+    "airTemp.forest": -0.001,
+    "airTemp.impoundArea": -0.0754,
+    "airTemp.prcp2": 0.024,
+    "airTemp.prcp2.da": -0.0119,
+    "airTemp.prcp30": -0.0521,
+    "airTemp.prcp30.da": -0.0065,
+    "AreaSqKM": 0.3951,
+    "devel_hi": -0.1131,
+    "forest": -0.45,
+    "impoundArea": 0.3492,
+    "intercept": 20.1129,
+    "prcp2": 0.0378,
+    "prcp2.da": -0.0438,
+    "prcp30": 0.0441,
+    "prcp30.da": -0.0835,
+    "temp7p": 1.6976
+  },
+  "std": {
+    "agriculture": {
+      "mean": 7.8839,
+      "sd": 11.912
+    },
+    "airTemp": {
+      "mean": 17.7657,
+      "sd": 5.2671
+    },
+    "AreaSqKM": {
+      "mean": 42.6534,
+      "sd": 47.2091
+    },
+    "devel_hi": {
+      "mean": 0.4129,
+      "sd": 1.7959
+    },
+    "forest": {
+      "mean": 75.9402,
+      "sd": 16.3572
+    },
+    "impoundArea": {
+      "mean": 2.819,
+      "sd": 4.7101
+    },
+    "prcp2": {
+      "mean": 7.4505,
+      "sd": 12.9838
+    },
+    "prcp30": {
+      "mean": 111.1321,
+      "sd": 56.2913
+    },
+    "temp7p": {
+      "mean": 17.7463,
+      "sd": 4.7962
+    }
+  }
+}

@@ -16,6 +16,27 @@ const variableLabels = {
   agriculture: 'Agriculture Cover (%)',
   devel_hi: 'High Development Cover (%)'
 }
+const attributeLabels = {
+  AreaSqKM: 'Drainage Area (log10[km2])',
+  impoundArea: 'Impounded Area (% of Total Drainage)',
+  forest: 'Forest Cover (%)',
+  agriculture: 'Agriculture Cover (%)',
+  devel_hi: 'High Devel. Cover (%)',
+  summer_prcp_mm: 'Summer Precip (mm)',
+  mean_jul_temp: 'Mean July Temp (C, Historical)',
+  occ_current: 'Occupancy Prob. (Historical)',
+  occ_air_2: 'Occupancy Prob. (+2 C Air Temp)',
+  occ_air_4: 'Occupancy Prob. (+4 C Air Temp)',
+  occ_air_6: 'Occupancy Prob. (+6 C Air Temp)',
+  occ_45_2035: 'Occupancy Prob. (RCP4.5, 2035)',
+  occ_85_2035: 'Occupancy Prob. (RCP8.5, 2035)',
+  occ_45_2055: 'Occupancy Prob. (RCP4.5, 2055)',
+  occ_85_2055: 'Occupancy Prob. (RCP8.5, 2055)',
+  occ_45_2075: 'Occupancy Prob. (RCP4.5, 2075)',
+  occ_85_2075: 'Occupancy Prob. (RCP8.5, 2075)',
+  occ_45_2090: 'Occupancy Prob. (RCP4.5, 2090)',
+  occ_85_2090: 'Occupancy Prob. (RCP8.5, 2090)'
+}
 
 const N_STEPS = 100
 const tempModelMap = new Map()
@@ -103,10 +124,10 @@ function setupUi () {
     .attr('class', 'legTitle')
     .attr('id', 'pointTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Identify</b></u></p><p>Displays attribute values for selected plot point.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Displays attribute values for selected plot point."</span>')
 
   d3.select('#pointTitle')
-    .html(d3.select('#pointTitle').html() + '<div class="exitDiv"><span id="hidePoint" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#pointTitle').html() + '<div class="exitDiv"><span id="hidePoint" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hidePoint')
     .on('click', function () { toggleWindow('point') })
@@ -131,10 +152,10 @@ function setupUi () {
     .attr('class', 'legTitle')
     .attr('id', 'infoTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Identify</b></u></p><p>Displays attribute value for visible overlay layers for a clicked point on the map</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Displays attribute value for visible overlay layers for a clicked point on the map."</span>')
 
   d3.select('#infoTitle')
-    .html(d3.select('#infoTitle').html() + '<div class="exitDiv"><span id="hideInfo" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#infoTitle').html() + '<div class="exitDiv"><span id="hideInfo" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hideInfo')
     .on('click', function () { toggleWindow('info') })
@@ -157,10 +178,10 @@ function setupUi () {
     .attr('class', 'legTitle')
     .attr('id', 'downloadTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Download</b></u></p><p>Download data for the current set of filtered locations as either a CSV or geoJSON (spatial files only) file.<br><br>NOTE: Queries for large numbers of sample locations and/or for raw data may take an extended time, but will appear in the bottom of this window for download once complete.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Download data for the current set of filtered locations as either a CSV or geoJSON (spatial files only) file. NOTE: Queries for large numbers of sample locations and/or for raw data may take an extended time, but will appear in the bottom of this window for download once complete."</span>')
 
   d3.select('#downloadTitle')
-    .html(d3.select('#downloadTitle').html() + '<div class="exitDiv"><span id="hideDownload" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#downloadTitle').html() + '<div class="exitDiv"><span id="hideDownload" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hideDownload')
     .on('click', function () { toggleWindow('download') })
@@ -203,10 +224,10 @@ function setupUi () {
     .attr('class', 'legTitle')
     .attr('id', 'filterTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Filter</b></u></p><p>Enables the filtering of data point locations through either feature selection on the map or attribute selection through the dropdown menu<br><br>NOTE: Display of filtered points on the map will only be visible at higher zoom levels.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Enable filtering of data point locations through either feature selection on the map or attribute selection through the dropdown menu. NOTE: Display of filtered points on the map will only be visible at higher zoom levels."</span>')
 
   d3.select('#filterTitle')
-    .html(d3.select('#filterTitle').html() + '<div class="exitDiv"><span id="hideFilter" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#filterTitle').html() + '<div class="exitDiv"><span id="hideFilter" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hideFilter')
     .on('click', function () { toggleWindow('filter') })
@@ -331,10 +352,10 @@ function initPage () { // eslint-disable-line
     .attr('class', 'legTitle')
     .attr('id', 'locateTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Locate</b></u></p><p>Enter name or coordinates to zoom to a location on the map.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Enter name or coordinates to zoom to a location on the map."</span>')
 
   d3.select('#locateTitle')
-    .html(d3.select('#locateTitle').html() + '<div class="exitDiv"><span id="hideLocate" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#locateTitle').html() + '<div class="exitDiv"><span id="hideLocate" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hideLocate')
     .on('click', function () { toggleWindow('locate') })
@@ -647,12 +668,8 @@ function initPage () { // eslint-disable-line
 
   Promise.all([
     d3.json('data/geojson/catchments_ma.json'),
-    // d3.tsv('data/model/1.2.2/df_app_data.tsv'),
     d3.csv('data/attributes.csv'),
-    d3.csv('data/model/1.2.2/df_z_group.csv'),
-    d3.csv('data/model/1.2.2/ranef_glmm.csv'),
-    d3.csv('data/model/1.2.2/summary_glmm.csv'),
-    d3.json('data/model/2.0.0/bto-model-v2.0.0-params.json')
+    d3.json('data/model/2.0.0/params.json')
   ]).then(render)
 
   function render (data) {
@@ -687,15 +704,15 @@ function initPage () { // eslint-disable-line
       .append('option')
       .attr('data-attr', function (d) { return d })
       .attr('value', function (d) { return d })
-      .text(function (d) { return d })
+      .text(function (d) { return attributeLabels[d] || 'None' })
 
     topos.model = {}
     topos.model.app_data = {}
     topos.model.z_group = {}
     topos.model.ranef_glmm = {}
     topos.model.summary_glmm = {}
-    topos.model.params = data[5]
-    topos.model.params.randomMap = d3.map(data[5].random, d => d.huc8)
+    topos.model.params = data[2]
+    topos.model.params.randomMap = d3.map(data[2].random, d => d.huc8)
 
     data[1].forEach(function (row) {
       const tmpObj = {}
@@ -709,17 +726,17 @@ function initPage () { // eslint-disable-line
       topos.model.app_data[row.featureid.toString()] = tmpObj
     })
 
-    data[2].forEach(function (row) {
-      topos.model.z_group[row.var] = { mean: parseFloat(row.mean), sd: parseFloat(row.sd) }
-    })
+    // data[2].forEach(function (row) {
+    //   topos.model.z_group[row.var] = { mean: parseFloat(row.mean), sd: parseFloat(row.sd) }
+    // })
 
-    data[3].forEach(function (row) {
-      topos.model.ranef_glmm[row.huc10] = { Intercept: parseFloat(row.Intercept), AreaSqKM: parseFloat(row.AreaSqKM), agriculture: parseFloat(row.agriculture), summer_prcp_mm: parseFloat(row.summer_prcp_mm), mean_jul_temp: parseFloat(row.mean_jul_temp) }
-    })
+    // data[3].forEach(function (row) {
+    //   topos.model.ranef_glmm[row.huc10] = { Intercept: parseFloat(row.Intercept), AreaSqKM: parseFloat(row.AreaSqKM), agriculture: parseFloat(row.agriculture), summer_prcp_mm: parseFloat(row.summer_prcp_mm), mean_jul_temp: parseFloat(row.mean_jul_temp) }
+    // })
 
-    data[4].forEach(function (row) {
-      topos.model.summary_glmm[row.variable] = { Estimate: parseFloat(row.Estimate), SE: parseFloat(row['Std.Error']) }
-    })
+    // data[4].forEach(function (row) {
+    //   topos.model.summary_glmm[row.variable] = { Estimate: parseFloat(row.Estimate), SE: parseFloat(row['Std.Error']) }
+    // })
 
     topos.catchments_ma.topo.features.forEach(function (feat) {
       feat.properties = Object.assign({}, feat.properties, topos.model.app_data[feat.properties.FEATUREID.toString()])
@@ -742,7 +759,8 @@ function initPage () { // eslint-disable-line
       .data(variableOptions)
       .enter()
       .append('option')
-      .text(function (d) { return d })
+      .attr('value', function (d) { return d })
+      .text(function (d) { return variableLabels[d] })
 
     d3.select('#plotX')
       .on('change', function () {
@@ -758,7 +776,8 @@ function initPage () { // eslint-disable-line
       .data(variableOptions)
       .enter()
       .append('option')
-      .text(function (d) { return d })
+      .attr('value', function (d) { return d })
+      .text(function (d) { return variableLabels[d] })
 
     d3.select('#plotX')
       .property('selectedIndex', 3)
@@ -766,7 +785,7 @@ function initPage () { // eslint-disable-line
       .property('selectedIndex', 0)
 
     d3.select('#catchmentSelect')
-      .property('selectedIndex', 8)
+      .property('selectedIndex', 7)
 
     setMappedAttribute(d3.select('#catchmentSelect').property('value'), color)
     toggleWindow('map')
@@ -896,10 +915,10 @@ function initPage () { // eslint-disable-line
     .attr('class', 'legTitle')
     .attr('id', 'mapTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Catchments</b></u></p><p>Control the display and mapped attribute for the catchments.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Control the display and mapped attribute for the catchments."</span>')
 
   d3.select('#mapTitle')
-    .html(d3.select('#mapTitle').html() + '<div class="exitDiv"><span id="hideMap" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#mapTitle').html() + '<div class="exitDiv"><span id="hideMap" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hideMap')
     .on('click', function () { toggleWindow('map') })
@@ -949,10 +968,10 @@ function initPage () { // eslint-disable-line
     .attr('class', 'legTitle')
     .attr('id', 'plotTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Plot</b></u></p><p>Create a bivariate surface plot of brook trout occupancy for two customizable variables.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Create a bivariate surface plot of brook trout occupancy for two customizable variables."</span>')
 
   d3.select('#plotTitle')
-    .html(d3.select('#plotTitle').html() + '<div class="exitDiv"><span id="hidePlot" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#plotTitle').html() + '<div class="exitDiv"><span id="hidePlot" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
 
   d3.select('#hidePlot')
     .on('click', function () {
@@ -1010,10 +1029,10 @@ function initPage () { // eslint-disable-line
     .attr('class', 'legTitle')
     .attr('id', 'legendTitle')
     .append('span')
-    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p><u><b>Legend</b></u></p><p>Displays legends for added map layers enabling their interpretation along with control over their transparency.<br><br>Drag and drop layers to change their order on the map.</p>"</span>')
+    .html('<span class="fa fa-info-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Displays legends for added map layers enabling their interpretation along with control over their transparency. Drag and drop layers to change their order on the map."</span>')
 
   d3.select('#legendTitle')
-    .html(d3.select('#legendTitle').html() + '<div class="exitDiv"><span id="hideLegend" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="<p>Click to hide window</p>"</span></div>')
+    .html(d3.select('#legendTitle').html() + '<div class="exitDiv"><span id="hideLegend" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window<"</span></div>')
 
   d3.select('#hideLegend')
     .on('click', function () { toggleWindow('legend') })

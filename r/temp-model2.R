@@ -336,7 +336,7 @@ predict_mean <- function(featureid, adjust = list(airTemp = 0, prcp = 1, forest 
   x_inp_mean_std %>% 
     pivot_longer(everything()) %>% 
     left_join(x_coef, by = "name") %>% 
-    mutate(temp = value * b) %>% 
+    mutate(temp = value * b) %>% view
     pull(temp) %>% 
     sum()
 }
