@@ -130,7 +130,7 @@ targets_projections <- list(
         by = "huc8"
       ) |> 
       mutate(
-        fixef = bto_model_params$fixed$intercept + bto_model_params$fixed$mean_jul_temp * (mean_jul_temp - bto_model_params$std$mean_jul_temp$mean) / bto_model_params$std$mean_jul_temp$sd,
+        fixef = bto_model_params$fixed$intercept + bto_model_params$fixed$mean_jul_temp * mean_jul_temp,
         totef = fixef + ranef,
         prob = exp(totef) / (1 + exp(totef))
       )

@@ -63,9 +63,9 @@ function setupUi () {
     .append('div')
     .attr('id', 'panelTools')
 
-  const hcPanels = ['info', 'legend', 'map', 'plot', 'locate', 'extent']
-  const hcGlyphs = ['fa-info', 'fa-th-list', 'fa-map', 'fa-area-chart', 'fa-search', 'fa-globe']
-  const hcLabel = ['Identify', 'Legend', 'Catchments', 'Plot', 'Locate', 'Zoom']
+  const hcPanels = ['about', 'map', 'plot', 'info', 'legend', 'locate', 'extent']
+  const hcGlyphs = ['fa-info', 'fa-map', 'fa-area-chart', 'fa-map-marker', 'fa-th-list', 'fa-search', 'fa-globe']
+  const hcLabel = ['About', 'Catchments', 'Plot', 'Identify', 'Legend', 'Locate', 'Zoom']
 
   d3.select('#panelTools').selectAll('divs')
     .data(hcPanels)
@@ -532,6 +532,11 @@ function initPage () { // eslint-disable-line
 
   d3.select('#headerControls')
     .insert('div', ':first-child')
+    .attr('id', 'title')
+    .text('MA Coldwater Refugia')
+
+  d3.select('#headerControls')
+    .append('div')
     .attr('id', 'mapTools')
     .append('div')
     .attr('id', 'baselayerSelect')
@@ -669,7 +674,7 @@ function initPage () { // eslint-disable-line
   Promise.all([
     d3.json('data/geojson/catchments_ma.json'),
     d3.csv('data/attributes.csv'),
-    d3.json('data/model/2.0.0/params.json')
+    d3.json('data/bto-model/params.json')
   ]).then(render)
 
   function render (data) {
@@ -789,6 +794,7 @@ function initPage () { // eslint-disable-line
 
     setMappedAttribute(d3.select('#catchmentSelect').property('value'), color)
     toggleWindow('map')
+    toggleWindow('about')
   }
 
   // remove selectable SVG layer when spatial filter is unchecked or layer is removed
@@ -900,6 +906,42 @@ function initPage () { // eslint-disable-line
       })
     d3.selectAll('#filterCnt').text(topos.geoIndicators.cf.geoIndicators.top(Infinity).length)
   }
+
+  //* *****Make div for about
+  d3.select('body')
+    .append('div')
+    .attr('class', 'legend gradDown')
+    .attr('id', 'aboutDiv')
+
+  $('#aboutDiv').draggable({ containment: 'html', cancel: '.toggle-group,input,textarea,button,select,option' })
+
+  d3.select('#aboutDiv')
+    .append('h4')
+    .text('Welcome')
+    .attr('class', 'legTitle')
+    .attr('id', 'aboutTitle')
+
+  d3.select('#aboutTitle')
+    .html(d3.select('#aboutTitle').html() + '<div class="exitDiv"><span id="hideAbout" class="fa fa-times-circle" data-toggle="tooltip" data-container="body" data-placement="auto" data-html="true" title="Click to hide window"</span></div>')
+
+  d3.select('#hideAbout')
+    .on('click', function () { toggleWindow('about') })
+
+  d3.select('#aboutDiv')
+    .append('div')
+    .html(`
+      <h2 style="margin-top:10px">Welcome to the MA Coldwater Refugia Tool</h2>
+      <p style="margin-top:20px">This web application provides an interactive data visualizations for exploring and identifying coldwater refugia in the state of Massachusetts. The two primary features of this application include:</p>
+      <ol>
+        <li><strong>Catchments Map</strong>: shows spatial variation in the selected attribute across all catchments in MA. Click the <span class="fa fa-map ml-1 mr-1"></span> button in the toolbar to change the catchment attribute.</li>
+        <li><strong>Bivariate Prediction Plots</strong>: click a catchment to open the bivariate prediction plots (or click the <span class="fa fa-area-chart ml-1 mr-1"></span> button in the toolbar). These plots show the predicted mean July stream temperature and brook trout occupancy probability over varying ranges of two input variables (e.g., change in air temperature and forest cover) for the selected catchment. Use the sliders to explore how the predicted values change in response to varying inputs. The predictions are dynamically computed using the respective EcoSHEDS models (see Data Sources below).</li>
+      </ol>
+      <p>In addition to the catchments map and bivariate prediction plots, the application also provides tools for changing the basemap, showing various overlay layers (e.g. counties or HUCs), identifying features in the selected overlay layers (<span class="fa fa-map-marker ml-1 mr-1"></span>), viewing the overlay layer legend (<span class="fa fa-th-list ml-1 mr-1"></span>), searching for a specific location (<span class="fa fa-search ml-1 mr-1"></span>), and resetting the map to its full extent (<span class="fa fa-globe ml-1 mr-1"></span>).</p>
+      <h5>Data Sources</h5>
+      <p>The map-based interface shows predictions from the <a href="https://ecosheds.github.io/northeast-bto-model/">EcoSHEDS Northeast Brook Trout Occupancy Model</a> and <a href="https://ecosheds.org/models/stream-temperature/latest/">Stream Temperature Model</a> under historical conditions (averaged over 1980-2021) as well as for various climate change scenarios (+ 2/4/6 degC air temperature, as well as RCP 4.5/8.5 in 2035, 2055, 2075). Downscaled climate predictions for the RCP climate change scenarios were obtained from <a href="https://resilientma.mass.gov/">ResilientMA</a>. The catchments and associated basin characteristics (e.g., land use, drainage area) are based on the <a href="https://ecosheds.github.io/necd/">EcoSHEDS Northeast Catchment Delineation (NECD)</a>.</p>
+      <h5>Development Team</h5>
+      <p>This application was primarily developed by Jason Coombs and Jeffrey Walker (Walker Environmental Research LLC) in collaboration with Keith Nislow (USDA Forest Service) and Ben Letcher (USGS).</p>
+      `)
 
   //* *****Make div for catchment styling
   d3.select('body')
@@ -1253,6 +1295,7 @@ function toggleWindow (name) {
   // console.log(`toggleWindow(${name})`)
 
   const labels = {
+    about: 'About',
     legend: 'Legend',
     info: 'Identify',
     locate: 'Locate',
@@ -1727,10 +1770,9 @@ function computeMeanJulyTemperature (model, userAdjust) {
 function calcOcc (meanJulyTemp, huc8) {
   if (meanJulyTemp === null) return null
   const params = topos.model.params
-  const std = params.std
   const fixed = params.fixed
 
-  const sumFixed = fixed.intercept + fixed.mean_jul_temp * (meanJulyTemp - std.mean_jul_temp.mean) / std.mean_jul_temp.sd
+  const sumFixed = fixed.intercept + fixed.mean_jul_temp * meanJulyTemp
 
   let sumRandom = 0
   // const huc8 = x.huc8

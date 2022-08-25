@@ -1,4 +1,5 @@
 targets_temp_model <- list(
+  tar_target(temp_model_dir, Sys.getenv("TEMP_MODEL_DIR"), cue = tar_cue("always")),
   tar_target(temp_model_inp_file, file.path(temp_model_dir, "model-input.rds"), format = "file"),
   tar_target(temp_model_inp, read_rds(temp_model_inp_file)),
   tar_target(temp_model_std, temp_model_inp$std),

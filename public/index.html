@@ -8,7 +8,7 @@
 
   <title>MA Coldwater Refugia Tool | EcoSHEDS</title>
 
-  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="lib/bootstrap/bootstrap.4.3.1.min.css"/>
   <link rel="stylesheet" href="lib/bootstrap-toggle/bootstrap-toggle.2.2.2.css"/>
   <link rel="stylesheet" href="lib/font-awesome/css/font-awesome.min.css"/>
@@ -17,8 +17,10 @@
   <link rel="stylesheet" href="lib/leaflet/L.Control.MousePosition.css"/>
   <link rel="stylesheet" href="lib/leaflet/L.Control.BingGeocoder.css"/>
 
-  <link rel="stylesheet" media="screen and (min-width: 520px)" href="css/desktop.css"/>
-  <link rel="stylesheet" media="screen and (max-width: 519px)" href="css/mobile.css"/>
+  <!-- <link rel="stylesheet" media="screen and (min-width: 520px)" href="css/desktop.css"/>
+  <link rel="stylesheet" media="screen and (max-width: 519px)" href="css/mobile.css"/> -->
+  <link rel="stylesheet" href="css/desktop.css"/>
+  <link rel="stylesheet" href="css/usgs.css"/>
 
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBk-pRMxjeu0G6yIfxqnZMPQE5LgLLB6P8"></script>
   <script src="lib/jquery/jquery.3.4.1.min.js"></script>
@@ -35,9 +37,56 @@
   <script src="lib/topojson/topojson.3.0.2.min.js"></script>
 
   <script src="js/app.js"></script>
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-TKQR8KP');</script>
+  <!-- End Google Tag Manager -->
 </head>
 <body>
+  <header id="navbar" class="header-nav" role="banner">
+    <div class="tmp-container">
+      <div class="header-search">
+        <a class="logo-header" href="https://www.usgs.gov/" title="USGS Home">
+          <img src="img/usgs-logo.png" alt="USGS" class="img" border="0" />
+        </a>
+      </div>
+    </div>
+  </header>
   <div id="map"></div>
+  <footer class="footer">
+    <div class="tmp-container">
+      <div class="footer-doi">
+        <ul class="menu nav">
+          <li class="first leaf menu-links menu-level-1"><a href="https://www.doi.gov/privacy">DOI Privacy Policy</a>
+          </li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.usgs.gov/laws/policies_notices.html">Legal</a>
+          </li>
+          <li class="leaf menu-links menu-level-1"><a
+              href="https://www2.usgs.gov/laws/accessibility.html">Accessibility</a></li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.usgs.gov/sitemap.html">Site Map</a></li>
+          <li class="last leaf menu-links menu-level-1"><a href="https://answers.usgs.gov/">Contact USGS</a></li>
+        </ul>
+      </div>
+
+      <hr class="usgs">
+
+      <div class="footer-doi">
+        <ul class="menu nav">
+          <li class="first leaf menu-links menu-level-1"><a href="https://www.doi.gov/">U.S. Department of the
+              Interior</a></li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.doioig.gov/">DOI Inspector General</a></li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.whitehouse.gov/">White House</a></li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.whitehouse.gov/omb/management/egov/">E-gov</a>
+          </li>
+          <li class="leaf menu-links menu-level-1"><a href="https://www.doi.gov/pmb/eeo/no-fear-act">No Fear Act</a>
+          </li>
+          <li class="last leaf menu-links menu-level-1"><a href="https://www2.usgs.gov/foia">FOIA</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+  <!-- Google Tag Manager (noscript) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TKQR8KP" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <!-- End Google Tag Manager (noscript) -->
 </body>
 
 <script>

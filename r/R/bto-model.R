@@ -1,7 +1,7 @@
 tar_option_set(packages = c("tidyverse", "lubridate", "janitor", "glue", "units", "sf", "jsonlite", "dotenv"))
 
 targets_bto_model <- list(
-  tar_target(bto_model_dir, Sys.getenv("BTO_MODEL_DIR")),
+  tar_target(bto_model_dir, Sys.getenv("BTO_MODEL_DIR"), cue = tar_cue("always")),
   
   tar_target(bto_model_file, file.path(bto_model_dir, "bto-model.rds"), format = "file"),
   tar_target(bto_model, read_rds(bto_model_file)),

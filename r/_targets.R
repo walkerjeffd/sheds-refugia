@@ -11,8 +11,6 @@ if (interactive()) {
 }
 
 list(
-  tar_target(temp_model_dir, Sys.getenv("TEMP_MODEL_DIR")),
-  
   targets_projections,
   targets_gis,
   targets_temp_model,
@@ -34,7 +32,4 @@ list(
       scale_color_viridis_c() +
       facet_grid(vars(rcp_scenario), vars(period))
   })
-  # TODO:
-  #   - move code from temp-model and export to targets
-  #   - compute predicted occupancy for rcp scenarios, add to mapped attribute list
 )

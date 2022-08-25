@@ -58,5 +58,10 @@ targets_export <- list(
     filename <- "../public/data/attributes.csv"
     write_csv(export_attributes, filename, na = "")
     filename
+  }, format = "file"),
+  tar_target(export_bto_model_params_file, {
+    filename <- "../public/data/bto-model/params.json"
+    file.copy(bto_model_params_file, filename)
+    filename
   }, format = "file")
 )

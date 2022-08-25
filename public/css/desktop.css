@@ -4,7 +4,6 @@ html {
 
 html, body {
   height: 100%;
-  //min-height: 700px;
 }
 
 .leaflet-pane > svg path {
@@ -34,7 +33,6 @@ html, body {
 
 .activeTopo.svgSelected {
   fill: red !important;
-  //fill-opacity: 0.4;
   stroke: magenta;
   stroke-width: 2.5;
   stroke-opacity: 1;
@@ -76,14 +74,18 @@ html, body {
   background: linear-gradient(#56638f, #434d70);
   width: 100%;
   position: absolute;
-  top: 0px;
+  top: 66px;
   left: 0px;
   height: 37px;
   display: block;
   color: #b3d9ff;
   padding: 1px 9px;
   border-bottom: solid 1px black;
-  //z-index: 1005;
+}
+
+#mapTools {
+  display: inline-block;
+  margin-right: 20px;
 }
 
 #mapTools .fa {
@@ -162,7 +164,6 @@ html, body {
 }
 
 #bingGeoLocate {
-  //display: none;
   margin-top: 5px;
 }
 
@@ -205,18 +206,15 @@ html, body {
 }
 
 #panelTools {
-  //width: 240px;
   height: 34px;
   display: inline-block;
-  float: left;
+  /* float: left; */
 }
 
 .hcPanelDivs {
   float: left;
-  //border-left: 1px solid #262c40;
   position: relative;
   top: -3px;
-  //height: 40px;
   padding: 7px 3px 5px 3px;
   cursor: pointer;
   margin-left: 0px;
@@ -257,8 +255,6 @@ html, body {
   margin: 4px 5px 0px 5px;
   font-size: 14px;
   font-weight: bold;
-  //position: relative;
-  //top: 1px;
   color: #b3d9ff;
 }
 
@@ -323,11 +319,11 @@ html, body {
 }
 
 #map {
-  height: calc(100% - 37px);
+  height: calc(100% - 37px - 66px - 66px);
   background: white;
   cursor: default;
   position: relative;
-  top: 37px;
+  top: 35px;
 }
 
 #map.leaflet-drag-target {
@@ -436,8 +432,6 @@ html, body {
 
 #pointDiv {
   z-index: 1005;
-  //opacity: 1;
-  //background: white;
   color: #333333;
 }
 
@@ -463,14 +457,13 @@ html, body {
 }
 
 #infoDiv {
-  //bottom: 20px;
-  top: calc(100% - 100px);
+  top: calc(100% - 150px);
   left: calc(100% - 169px);
   box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
 }
 
 #downloadDiv {
-  top: 40px;
+  top: 110px;
   left: calc(100% - 500px);
   min-width: 190px;
 }
@@ -530,7 +523,7 @@ html, body {
 }
 
 #locateDiv {
-  top: calc(100% - 80px);
+  top: calc(100% - 150px);
   left: calc(50% - 106px);
   box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
 }
@@ -543,9 +536,20 @@ html, body {
 }
 
 #mapDiv {
-  top: 40px;
+  top: 110px;
   left: calc(90% - 95px);
   box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
+}
+
+#aboutDiv {
+  z-index: 9000 !important;
+  top: 110px;
+  left: 15px;
+  max-width: 800px;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
+  text-align: left;
 }
 
 #catchmentDiv {
@@ -566,7 +570,6 @@ html, body {
 
 .on_off {
   border-radius: 11px;
-  //float: right;
   border: 1px solid lightgray;
   position: relative;
   top: -3px;
@@ -617,7 +620,6 @@ html, body {
 }
 
 .toggle-handle:hover {
-  //background: linear-gradient(#c99c9c, #f47171);
   background: linear-gradient(#7ab87a, #52e052);
 }
 
@@ -663,13 +665,13 @@ html, body {
 }
 
 #plotDiv {
-  top: 40px;
+  top: 110px;
   left: 5px;
   box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
 }
 
 #filterDiv {
-  top: 40px;
+  top: 110px;
   left: 10px;
   box-shadow: 5px 5px 5px rgba(0,0,0,0.3);
 }
@@ -797,7 +799,7 @@ html, body {
 
 #legendDiv {
   position: absolute;
-  top: 300px;
+  top: 410px;
   left: calc(100% - 233px);
   width: auto;
   min-width: 225px;
@@ -830,7 +832,6 @@ html, body {
 }
 
 .legendTitle {
-  //margin: 20px 5px 5px 5px;
   font-size: 18px;
   white-space: nowrap;
   text-align: left;
@@ -918,7 +919,13 @@ html, body {
 }
 
 .ui-slider-handle.ui-state-default:active {
-  background: radial-gradient(white, lime); 
+  background: radial-gradient(white, lime);
+}
+
+.legend a {
+  color: #2a3046;
+  font-weight: bold;
+  text-decoration: underline;
 }
 
 .fa {
@@ -937,8 +944,6 @@ html, body {
 }
 
 .tooltip-inner {
-  //max-width: 200px;
-  //width: 200px;
   text-shadow: none;
 }
 
@@ -957,4 +962,12 @@ html, body {
   z-index: 3000;
   visibility: hidden;
   white-space: nowrap;
+}
+
+#title {
+  display: inline-block;
+  vertical-align:middle;
+  height: 50px;
+  margin-right: 20px;
+  font-weight: bold;
 }
